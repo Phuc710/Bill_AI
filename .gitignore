@@ -1,0 +1,51 @@
+# Bill AI — Python gitignore
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# Environments
+.env
+.env.*
+!.env.example
+venv/
+env/
+.venv/
+
+# Models (large binary files — track separately via Git LFS if needed)
+models/*.pt
+models/*.onnx
+models/*.engine
+
+# Outputs and logs (runtime artifacts)
+logs/
+outputs/
+
+# Test images (optional — remove if you want to track them)
+*.jpg
+*.jpeg
+*.png
+*.bmp
+*.webp
+!frontend/
+
+# PaddleOCR auto-downloaded model cache
+.paddleocr/
+inference/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build / dist
+dist/
+build/
+*.egg-info/
