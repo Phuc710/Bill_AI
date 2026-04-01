@@ -109,7 +109,7 @@ class Config:
 - Chuẩn hóa MST: giữ chỉ `[0-9-]`
 
 #### [NEW] core/extractor.py — `FieldExtractor`
-**Key mapping (tiếng Việt + nhiều alias):**
+**Key mapping (tiếng Việt + many aliases):**
 | Keywords | Field |
 |---|---|
 | `mst`, `mã số thuế`, `tax` | `tax_code` |
@@ -122,18 +122,18 @@ class Config:
 
 Logic:
 1. Sort lines top→bottom
-2. Với mỗi line: normalize text → check keyword map
-3. Nếu khớp key → extract value từ cùng dòng (sau `:` hoặc [tab](file:///c:/Users/Phucc/Downloads/billAI/formatter.py#7-50)) hoặc line bên phải
-4. Nếu không khớp key nào → bỏ qua
+2. With each line: normalize text → check keyword map
+3. If key matches → extract value from same line (after `:` or [tab](file:///c:/Users/Phucc/Downloads/billAI/formatter.py#7-50)) or adjacent line
+4. If no match → skip
 
 #### [NEW] core/validator.py — `OutputValidator`
 - MST: `^\d{10}(-\d{3})?$`
 - Date: parseable string
 - Total: numeric > 0
-- Fields có `confidence < 0.6` → `needs_review = True`
+- Fields with `confidence < 0.6` → `needs_review = True`
 
 #### [NEW] core/logger.py — `PipelineTracker`
-Ghi nhận toàn bộ pipeline per request:
+Logs the entire pipeline per request:
 ```json
 {
   "request_id": "uuid",
@@ -161,14 +161,14 @@ class InvoiceResult(BaseModel): request_id, status, result, log_path
 #### [NEW] api/routes/invoice.py
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/upload-invoice` | Upload ảnh → validate → save → return `request_id` |
-| POST | `/extract-invoice` | Run pipeline từ `request_id` → return result |
-| GET | `/result/{id}` | Lấy kết quả đã lưu theo `request_id` |
-| POST | `/export-csv` | Export 1 hoặc nhiều result ra CSV |
+| POST | `/upload-invoice` | Upload image → validate → save → return `request_id` |
+| POST | `/extract-invoice` | Run pipeline from `request_id` → return result |
+| GET | `/result/{id}` | Fetch results by `request_id` |
+| POST | `/export-csv` | Export results to CSV |
 
 #### [NEW] api/main.py
-- FastAPI app, CORS, mount frontend tĩnh
-- `GET /` trả về `frontend/index.html`
+- FastAPI app, CORS, mount frontend
+- `GET /` returns `frontend/index.html`
 
 ---
 
@@ -176,10 +176,10 @@ class InvoiceResult(BaseModel): request_id, status, result, log_path
 
 #### [NEW] frontend/index.html
 - Upload (drag-and-drop)
-- Preview ảnh + vẽ bbox đỏ sau khi detect
-- Bảng kết quả (editable cells, màu vàng = `needs_review`)
+- Image preview + red bbox after detection
+- Result table (editable cells, yellow = `needs_review`)
 - Confidence badge per field
-- Nút Export CSV/Excel
+- Export CSV/Excel button
 
 ---
 
@@ -187,8 +187,7 @@ class InvoiceResult(BaseModel): request_id, status, result, log_path
 
 1. `pip install fastapi uvicorn ultralytics pillow opencv-python-headless python-multipart`
 2. `uvicorn api.main:app --reload`
-3. Mở `http://localhost:8000`
-4. Test với [bill2.jpg](file:///c:/Users/Phucc/Downloads/billAI/bill2.jpg), [bill3.jpg](file:///c:/Users/Phucc/Downloads/billAI/bill3.jpg)
-5. Test non-bill image → phải trả `no_bill_detected`
-6. Kiểm tra file log trong `logs/`
-7. Export CSV
+3. Open `http://localhost:8000`
+4. Test with local images.
+5. Check logs in `logs/`
+6. Export CSV
