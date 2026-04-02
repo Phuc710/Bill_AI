@@ -1,90 +1,76 @@
 """
-ImageStandardizer — crop → resize → deskew → enhance.
-
-Keeps processing lightweight: stays in numpy for the heavy steps,
-only converts back to PIL at the end.
+Image standardizer: crop detected bill region, deskew, and enhance for OCR.
 """
 from __future__ import annotations
 
+from typing import List
+
 import cv2
 import numpy as np
-from PIL import Image, ImageEnhance, ImageOps
-
-from core.config import Config
-
-# Minimum pixel count on the longer side before we bother with deskew.
-# Small images rarely need rotation and Otsu + minAreaRect is expensive.
-_DESKEW_MIN_SIDE = 500
+from PIL import Image, ImageOps
 
 
 class ImageStandardizer:
-    """Post-detection image normalisation pipeline."""
+    """Crop, deskew, and lightly enhance the bill region."""
 
-    def standardize(self, image: Image.Image, bbox: list[int]) -> Image.Image:
+    def standardize(self, image: Image.Image, bbox: List[int]) -> Image.Image:
         """
-        Crop → resize → (optional deskew) → gentle contrast boost.
-        Returns a clean PIL Image ready for OCR.
+        Crop to the bounding box with a small padding, deskew if tilted,
+        and apply mild contrast enhancement for better OCR.
         """
-        arr = self._crop_to_array(image, bbox)
-        arr = self._resize_array(arr)
-        arr = self._deskew_array(arr)
-        # Final PIL conversion + light enhance
-        img = Image.fromarray(arr)
-        return self._enhance(img)
-
-    # ── Internal steps (numpy-native where possible) ──────────────────────
-
-    @staticmethod
-    def _crop_to_array(image: Image.Image, bbox: list[int]) -> np.ndarray:
-        """Crop with 2 % padding, return as RGB numpy array."""
         x1, y1, x2, y2 = bbox
-        w, h = image.size
+        w_img, h_img = image.size
+
+        # Add 2% padding around the detected region
         pad_x = int((x2 - x1) * 0.02)
         pad_y = int((y2 - y1) * 0.02)
-        x1, y1 = max(0, x1 - pad_x), max(0, y1 - pad_y)
-        x2, y2 = min(w, x2 + pad_x), min(h, y2 + pad_y)
-        return np.array(image.crop((x1, y1, x2, y2)).convert("RGB"))
+        x1 = max(0, x1 - pad_x)
+        y1 = max(0, y1 - pad_y)
+        x2 = min(w_img, x2 + pad_x)
+        y2 = min(h_img, y2 + pad_y)
 
-    @staticmethod
-    def _resize_array(arr: np.ndarray) -> np.ndarray:
-        """Resize longest side to MAX_IMG_SIDE if necessary."""
-        h, w = arr.shape[:2]
-        longest = max(w, h)
-        if longest <= Config.MAX_IMG_SIDE:
-            return arr
-        scale = Config.MAX_IMG_SIDE / longest
-        new_w, new_h = int(w * scale), int(h * scale)
-        return cv2.resize(arr, (new_w, new_h), interpolation=cv2.INTER_AREA)
+        cropped = image.crop((x1, y1, x2, y2)).convert("RGB")
+        deskewed = self._deskew(cropped)
+        enhanced = self._enhance(deskewed)
+        return enhanced
 
-    @staticmethod
-    def _deskew_array(arr: np.ndarray) -> np.ndarray:
-        """Correct mild skew (1°–15°).  Skip for small images."""
-        h, w = arr.shape[:2]
-        if max(w, h) < _DESKEW_MIN_SIDE:
-            return arr
+    def _deskew(self, image: Image.Image) -> Image.Image:
+        """Straighten slightly rotated images using Hough line detection."""
         try:
-            gray = cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY)
-            _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
-            coords = np.column_stack(np.where(thresh > 0))
-            if len(coords) < 200:
-                return arr
-            angle = cv2.minAreaRect(coords)[-1]
-            angle = -(90 + angle) if angle < -45 else -angle
-            if abs(angle) < 1.0 or abs(angle) > 15.0:
-                return arr
-            M = cv2.getRotationMatrix2D((w / 2, h / 2), angle, 1.0)
-            return cv2.warpAffine(
-                arr, M, (w, h),
-                borderMode=cv2.BORDER_CONSTANT,
-                borderValue=(255, 255, 255),
-            )
-        except Exception:
-            return arr
+            gray = np.array(image.convert("L"))
+            edges = cv2.Canny(gray, 50, 150, apertureSize=3)
+            lines = cv2.HoughLines(edges, 1, np.pi / 180, threshold=100)
+            if lines is None:
+                return image
 
-    @staticmethod
-    def _enhance(image: Image.Image) -> Image.Image:
-        """Gentle contrast + sharpness.  No heavy denoise that kills text."""
-        img = ImageOps.autocontrast(image, cutoff=0.5)
-        img = ImageEnhance.Contrast(img).enhance(1.1)
-        img = ImageEnhance.Sharpness(img).enhance(1.3)
-        return img
+            angles = []
+            for line in lines[:20]:
+                rho, theta = line[0]
+                angle_deg = np.degrees(theta) - 90
+                if abs(angle_deg) < 15:
+                    angles.append(angle_deg)
+
+            if not angles:
+                return image
+
+            median_angle = float(np.median(angles))
+            if abs(median_angle) < 0.5:
+                return image
+
+            return image.rotate(-median_angle, expand=True, fillcolor=(255, 255, 255))
+        except Exception:
+            return image
+
+    def _enhance(self, image: Image.Image) -> Image.Image:
+        """Apply mild CLAHE contrast equalization for better OCR performance."""
+        try:
+            img_array = np.array(image)
+            lab = cv2.cvtColor(img_array, cv2.COLOR_RGB2LAB)
+            l_channel, a, b = cv2.split(lab)
+            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+            l_channel = clahe.apply(l_channel)
+            lab = cv2.merge([l_channel, a, b])
+            enhanced = cv2.cvtColor(lab, cv2.COLOR_LAB2RGB)
+            return Image.fromarray(enhanced)
+        except Exception:
+            return image

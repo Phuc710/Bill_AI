@@ -1,22 +1,15 @@
-# Bill AI v2.1 — Dependencies
-# Install: pip install -r requirements.txt
+# Bill AI — OCR-first
+# pip install -r requirements.txt
 
-# Core ML
-ultralytics>=8.0.0          # YOLOv8 — detec.pt + ocr.pt
-easyocr>=1.7.0              # Primary OCR — Vietnamese + English
+# OCR
+vncv
 
-# Image processing
+# Core
 Pillow>=10.0.0
 opencv-python-headless>=4.9.0
-
-# API
 fastapi>=0.110.0
 uvicorn[standard]>=0.29.0
-python-multipart>=0.0.9     # File upload support
+python-multipart>=0.0.9
 pydantic>=2.0.0
-
-# Utilities
 python-dotenv>=1.0.0
-
-# Gemini AI
-google-generativeai>=0.8.0  # Gemini Flash — structured extraction
+google-generativeai>=0.8.0

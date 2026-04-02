@@ -1,41 +1,26 @@
 """
-Invoice API routes.
-
-Endpoints:
-  POST /api/process            — upload + extract in ONE call (primary)
-  POST /api/upload-invoice     — legacy: upload only
-  POST /api/extract-invoice    — legacy: extract from stored upload
-  GET  /api/result/{id}        — fetch saved result by request_id
-  POST /api/export-csv         — export results to CSV
-  GET  /api/debug/{id}         — raw OCR + timing
+Clean Invoice API routes.
 """
 from __future__ import annotations
 
+import asyncio
 import csv
 import io
 import json
-import uuid
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 
-from api.schemas import ExportRequest, PipelineResponse, UploadResponse
+from api.schemas import BatchProcessResponse, ExportRequest, PipelineResponse
 from core.config import Config
 from core.pipeline import InvoicePipeline
 
 router = APIRouter(prefix="/api", tags=["invoice"])
-
-# Single pipeline instance — models lazy-loaded on first request
 _pipeline = InvoicePipeline()
 
-# Legacy in-memory store for 2-step upload→extract flow
-_image_store: Dict[str, Dict[str, Any]] = {}
-
-
-# ── Validation helper ─────────────────────────────────────────────────────
 
 def _validate_upload(file: UploadFile) -> None:
     ext = Path(file.filename or "").suffix.lower()
@@ -43,21 +28,39 @@ def _validate_upload(file: UploadFile) -> None:
         raise HTTPException(400, f"Unsupported file type: {ext}")
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# PRIMARY ENDPOINT — single call, no intermediate state
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+def _safe_json_loads(raw: Optional[str]) -> Dict[str, Any]:
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+        return parsed if isinstance(parsed, dict) else {}
+    except Exception:
+        return {}
+
 
 @router.post("/process", response_model=PipelineResponse)
-async def process_invoice(file: UploadFile = File(...)) -> PipelineResponse:
-    """Upload an image and get extraction results in a single call."""
+async def process_invoice(
+    file: UploadFile = File(...),
+    user_id: str = Form(default=""),
+    request_id: str = Form(default=""),
+    metadata: str = Form(default=""),
+) -> PipelineResponse:
     _validate_upload(file)
     data = await file.read()
+
     if len(data) > Config.MAX_IMAGE_BYTES:
-        raise HTTPException(413, "File too large (max 15 MB)")
+        raise HTTPException(413, f"File too large. Max={Config.MAX_IMAGE_BYTES} bytes")
+
+    meta_obj = _safe_json_loads(metadata)
 
     try:
         result = await run_in_threadpool(
-            _pipeline.run, data, file.filename or "image.jpg",
+            _pipeline.run,
+            data,
+            file.filename or "image.jpg",
+            user_id,
+            request_id,
+            meta_obj,
         )
     except Exception as exc:
         raise HTTPException(500, f"Pipeline error: {exc}")
@@ -65,60 +68,100 @@ async def process_invoice(file: UploadFile = File(...)) -> PipelineResponse:
     return PipelineResponse(**result)
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# LEGACY ENDPOINTS (kept for backward compatibility)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+@router.post("/process-batch", response_model=BatchProcessResponse)
+async def process_batch(
+    files: list[UploadFile] = File(...),
+    user_id: str = Form(default=""),
+    metadata: str = Form(default=""),
+) -> BatchProcessResponse:
+    if not files:
+        raise HTTPException(400, "No files uploaded")
 
-@router.post("/upload-invoice", response_model=UploadResponse)
-async def upload_invoice(file: UploadFile = File(...)) -> UploadResponse:
-    _validate_upload(file)
-    data = await file.read()
-    if len(data) > Config.MAX_IMAGE_BYTES:
-        raise HTTPException(413, "File too large (max 15 MB)")
+    if len(files) > Config.BATCH_MAX_FILES:
+        raise HTTPException(400, f"Too many files. Max={Config.BATCH_MAX_FILES}")
 
-    req_id = uuid.uuid4().hex[:12]
-    _image_store[req_id] = {"data": data, "filename": file.filename or req_id}
-    return UploadResponse(
-        request_id=req_id,
-        filename=file.filename or req_id,
-        size_bytes=len(data),
-        message="Upload OK. POST /api/extract-invoice to process.",
+    meta_obj = _safe_json_loads(metadata)
+    sem = asyncio.Semaphore(max(1, Config.BATCH_CONCURRENCY))
+
+    async def _run_one(upload: UploadFile) -> PipelineResponse:
+        _validate_upload(upload)
+        data = await upload.read()
+        if len(data) > Config.MAX_IMAGE_BYTES:
+            raise HTTPException(413, f"File {upload.filename} too large")
+
+        async with sem:
+            payload = await run_in_threadpool(
+                _pipeline.run,
+                data,
+                upload.filename or "image.jpg",
+                user_id,
+                "",
+                meta_obj,
+            )
+            return PipelineResponse(**payload)
+
+    tasks = [_run_one(f) for f in files]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    responses: list[PipelineResponse] = []
+    success_count = 0
+    fail_count = 0
+
+    for item in results:
+        if isinstance(item, Exception):
+            fail_count += 1
+            responses.append(
+                PipelineResponse(
+                    request_id="",
+                    status="fail",
+                    message=str(item),
+                    has_bill=False,
+                    needs_review=True,
+                    result=None,
+                    structured=None,
+                    raw=None,
+                    meta=None,
+                    orig_image=None,
+                    log_path="",
+                )
+            )
+            continue
+
+        responses.append(item)
+        if item.status == "success":
+            success_count += 1
+        else:
+            fail_count += 1
+
+    return BatchProcessResponse(
+        total=len(files),
+        success_count=success_count,
+        fail_count=fail_count,
+        results=responses,
     )
 
-
-@router.post("/extract-invoice", response_model=PipelineResponse)
-async def extract_invoice(request_id: str) -> PipelineResponse:
-    store = _image_store.pop(request_id, None)
-    if store is None:
-        raise HTTPException(404, f"request_id not found: {request_id}")
-    try:
-        result = await run_in_threadpool(
-            _pipeline.run, store["data"], store["filename"],
-        )
-    except Exception as exc:
-        raise HTTPException(500, f"Pipeline error: {exc}")
-    return PipelineResponse(**result)
-
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# RESULT / EXPORT / DEBUG
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 @router.get("/result/{request_id}", response_model=PipelineResponse)
 async def get_result(request_id: str) -> PipelineResponse:
     log_path = Config.LOGS_DIR / f"{request_id}.json"
     if not log_path.exists():
-        raise HTTPException(404, f"No log for: {request_id}")
+        raise HTTPException(404, "Not found")
+
     data = json.loads(log_path.read_text(encoding="utf-8"))
-    return PipelineResponse(
-        request_id=data.get("request_id", request_id),
-        status=data.get("status", "unknown"),
-        result=data.get("result"),
-        orig_image=f"/outputs/{request_id}_orig.jpg",
-        detect_image=f"/outputs/{request_id}_detect.jpg",
-        ocr_image=f"/outputs/{request_id}_ocr.jpg",
-        log_path=str(log_path),
-    )
+    payload = {
+        "request_id": request_id,
+        "status": data.get("status", "unknown"),
+        "message": data.get("message", ""),
+        "has_bill": bool(data.get("status") == "success"),
+        "needs_review": bool((data.get("validation") or {}).get("needs_review", False)),
+        "result": data.get("result"),
+        "structured": data.get("structured"),
+        "raw": data.get("raw"),
+        "meta": data.get("meta"),
+        "orig_image": data.get("original_image"),
+        "log_path": str(log_path),
+    }
+    return PipelineResponse(**payload)
 
 
 @router.post("/export-csv")
@@ -128,55 +171,30 @@ async def export_csv(body: ExportRequest) -> StreamingResponse:
         log_path = Config.LOGS_DIR / f"{req_id}.json"
         if not log_path.exists():
             continue
-        log    = json.loads(log_path.read_text(encoding="utf-8"))
+
+        log = json.loads(log_path.read_text(encoding="utf-8"))
         result = log.get("result") or {}
-        base = {
-            "request_id": req_id,
-            "status":     log.get("status"),
-            "timestamp":  log.get("timestamp"),
-            "SELLER":     result.get("SELLER", ""),
-            "ADDRESS":    result.get("ADDRESS", ""),
-            "DATETIME":   result.get("TIMESTAMP", ""),
-            "TOTAL_COST": result.get("TOTAL_COST", ""),
-        }
-        products = result.get("PRODUCTS") or []
-        if products:
-            for p in products:
-                row = dict(base)
-                row["PRODUCT"] = p.get("PRODUCT", "")
-                row["NUM"]     = p.get("NUM", "")
-                row["VALUE"]   = p.get("VALUE", "")
-                rows.append(row)
-        else:
-            rows.append(base)
+        rows.append(
+            {
+                "id": req_id,
+                "seller": result.get("SELLER", ""),
+                "total": result.get("TOTAL_COST", ""),
+                "status": log.get("status", ""),
+                "needs_review": bool((log.get("validation") or {}).get("needs_review", False)),
+            }
+        )
 
     if not rows:
-        raise HTTPException(404, "No valid request_ids found")
+        raise HTTPException(404, "No results")
 
     buf = io.StringIO()
-    writer = csv.DictWriter(buf, fieldnames=list(rows[0].keys()), extrasaction="ignore")
+    writer = csv.DictWriter(buf, fieldnames=list(rows[0].keys()))
     writer.writeheader()
     writer.writerows(rows)
     buf.seek(0)
 
     return StreamingResponse(
         iter([buf.getvalue()]),
-        media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": "attachment; filename=invoice_results.csv"},
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=results.csv"},
     )
-
-
-@router.get("/debug/{request_id}")
-async def debug_ocr(request_id: str) -> dict:
-    log_path = Config.LOGS_DIR / f"{request_id}.json"
-    if not log_path.exists():
-        raise HTTPException(404, f"No log for: {request_id}")
-    data = json.loads(log_path.read_text(encoding="utf-8"))
-    return {
-        "request_id":          request_id,
-        "status":              data.get("status"),
-        "timing_ms":           data.get("timing_ms"),
-        "detector_confidence": data.get("detector_confidence"),
-        "ocr_line_count":      len(data.get("ocr_raw") or []),
-        "ocr_raw":             data.get("ocr_raw") or [],
-    }

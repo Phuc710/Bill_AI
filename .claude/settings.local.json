@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(git -C \"C:\\\\Users\\\\Phucc\\\\Downloads\\\\billAI_nhom2\" status:*)",
+      "Bash(python -m py_compile:*)",
+      "Bash(python:*)",
+      "Bash(git -C \"C:/Users/Phucc/Downloads/billAI_nhom2\" status:*)",
+      "Bash(git -C \"C:/Users/Phucc/Downloads/billAI_nhom2\" diff:*)",
+      "Bash(node:*)"
+    ]
+  }
+}

@@ -1,16 +1,14 @@
 /**
- * BillAI Frontend
- * Single-call pipeline: POST /api/process → full result
+ * BillAI Premium Frontend
+ * Handles single-call pipeline with full performance tracking.
  */
 class BillAI {
     constructor() {
         this.requestId = null;
         this.currentFile = null;
         this.activeTab = 'detect';
-        this.stepUrls = { detect: null, proc: null, ocr: null };
-        this.isLoading = false;
-
-        // DOM cache
+        
+        // DOM Elements
         this.dropZone       = document.getElementById('drop-zone');
         this.fileInput      = document.getElementById('file-input');
         this.btnExtract     = document.getElementById('btn-extract');
@@ -20,23 +18,23 @@ class BillAI {
         this.tbody          = document.getElementById('result-tbody');
         this.itemsSection   = document.getElementById('items-section');
         this.itemsBody      = document.getElementById('items-body');
-        this.jsonOut         = document.getElementById('json-out');
+        this.jsonOut        = document.getElementById('json-out');
         this.reqIdDisplay   = document.getElementById('req-id-display');
+        this.perfGrid       = document.getElementById('perf-grid');
         this.loadingOverlay = document.getElementById('loading-overlay');
         this.loadingText    = document.getElementById('loading-text');
         this.progressBar    = document.getElementById('progress-bar');
-        this.extractLabel   = this.btnExtract?.textContent || 'Trích xuất';
-
+        
         this.init();
     }
 
     init() {
         this.bindEvents();
-        this.setStatus('Trạng thái: Chờ ảnh');
+        this.setStatus('Hệ thống sẵn sàng — Chờ tệp tin');
     }
 
     bindEvents() {
-        // Drag-and-drop
+        // Drag and Drop
         ['dragover', 'dragenter'].forEach(ev =>
             this.dropZone.addEventListener(ev, e => { e.preventDefault(); this.dropZone.classList.add('drag-over'); })
         );
@@ -58,14 +56,13 @@ class BillAI {
         this.btnExport.addEventListener('click', () => this.exportCsv());
         this.btnClear.addEventListener('click', () => this.reset());
 
-        // Tab switching (exposed globally for inline onclick)
+        // External switch
         window.switchTab = (btn, step) => this.handleTabSwitch(btn, step);
     }
 
     setFile(file) {
         if (this.isLoading) return;
         this.currentFile = file;
-        this.requestId = null;
         this.btnExtract.disabled = false;
         this.btnExport.disabled = true;
 
@@ -73,212 +70,155 @@ class BillAI {
         reader.onload = e => {
             document.getElementById('placeholder').style.display = 'none';
             let img = this.dropZone.querySelector('img.preview');
-            if (!img) { img = document.createElement('img'); img.className = 'preview'; this.dropZone.prepend(img); }
+            if (!img) { 
+                img = document.createElement('img'); 
+                img.className = 'preview'; 
+                this.dropZone.appendChild(img); 
+            }
             img.src = e.target.result;
         };
         reader.readAsDataURL(file);
         this.setStatus(`Đã tải: ${file.name} (${(file.size / 1024).toFixed(0)} KB)`);
     }
 
-    // ── Main pipeline — SINGLE fetch call ────────────────────────────────
-
     async runPipeline() {
         if (!this.currentFile || this.isLoading) return;
 
-        this.btnExtract.disabled = true;
-        this.btnClear.disabled = true;
-        this.btnExport.disabled = true;
+        this.setLoading(true, 'Đang phân tích hình ảnh...', 10);
         this.statusBar.innerHTML = '';
+        this.setStatus('Bắt đầu quy trình xử lý AI...', 'running');
 
-        this.setLoading(true, 'Đang tải lên và xử lý…', 10);
-        this.setStatus('Đang gửi ảnh và chạy AI Pipeline…', 'running');
-
-        // Simulate progress while waiting for the single call
+        // Progress mock
         let progress = 10;
         const progressInterval = setInterval(() => {
-            if (progress < 90) { progress += Math.random() * 6; this.setProgress(progress); }
-        }, 700);
+            if (progress < 90) { 
+               progress += Math.random() * 5; 
+               this.setProgress(progress); 
+            }
+        }, 800);
 
         try {
             const fd = new FormData();
             fd.append('file', this.currentFile);
 
             const res = await fetch('/api/process', { method: 'POST', body: fd });
-
             clearInterval(progressInterval);
             this.setProgress(100);
 
             if (!res.ok) {
-                const err = await res.json().catch(() => ({ detail: 'Lỗi server' }));
-                throw new Error(err.detail || 'Lỗi xử lý');
+                const err = await res.json().catch(() => ({ detail: 'Lỗi máy chủ rỗng' }));
+                throw new Error(err.detail || 'Không thể xử lý pipeline');
             }
 
             const data = await res.json();
             this.requestId = data.request_id;
-            this.reqIdDisplay.textContent = `ID: ${this.requestId}`;
-
-            this.stepUrls = {
-                detect: data.detect_image,
-                proc:   data.detect_image ? data.detect_image.replace('_detect.jpg', '_proc.jpg') : null,
-                ocr:    data.ocr_image,
-            };
-
-            this.renderSteps();
-            this.renderResult(data);
-
-            const label = data.status === 'success' ? 'Hoàn tất' : data.status;
-            this.setStatus(`${label} (ID: ${this.requestId.substring(0, 8)}…)`, 'done');
+            this.reqIdDisplay.textContent = `UID: ${this.requestId}`;
+            
+            this.renderImages(data);
+            this.renderResult(data.structured || {}, data.result || {});
+            
+            this.jsonOut.textContent = JSON.stringify(data.structured || {}, null, 2);
+            this.setStatus('Hoàn tất trích xuất thành công', 'done');
             this.btnExport.disabled = false;
 
         } catch (err) {
             clearInterval(progressInterval);
             this.setProgress(0);
             this.setStatus(`Lỗi: ${err.message}`, 'error');
+            console.error(err);
         } finally {
             this.setLoading(false);
-            this.btnExtract.disabled = !this.currentFile;
-            this.btnClear.disabled = false;
         }
     }
 
-    // ── Tab switching ────────────────────────────────────────────────────
+    renderImages(data) {
+        document.getElementById('step-placeholder').style.display = 'none';
+        
+        const urls = {
+            detect: data.detect_image, // Red BBox
+            proc:   data.proc_image   // Cropped/Filtered
+        };
+
+        ['detect', 'proc'].forEach(step => {
+            const img = document.getElementById(`img-${step}`);
+            if (img) {
+                if (urls[step]) {
+                    img.src = `${urls[step]}?t=${Date.now()}`;
+                    if (this.activeTab === step) img.style.display = 'block';
+                } else {
+                    img.style.display = 'none';
+                }
+            }
+        });
+
+        // OCR Text View
+        const ocrView = document.getElementById('ocr-text-view');
+        const rawText = data.structured?.raw_text || '';
+        if (ocrView) {
+            ocrView.textContent = rawText;
+            if (this.activeTab === 'ocr') ocrView.style.display = 'block';
+        }
+    }
+
+    // renderPerf removed as requested 
+
+    renderResult(s, legacy) {
+        this.tbody.innerHTML = '';
+        
+        const rows = [
+            { l: 'Cửa hàng', v: s.store_name || legacy.SELLER },
+            { l: 'Địa chỉ', v: s.address || legacy.ADDRESS },
+            { l: 'Số HĐ', v: s.invoice_id },
+            { l: 'Ngày giờ', v: s.datetime_in || legacy.TIMESTAMP },
+            { l: 'Thu ngân', v: s.cashier },
+            { l: 'Tổng tiền', v: s.total != null ? `${s.total.toLocaleString('vi-VN')} VND` : null }
+        ];
+
+        rows.forEach(r => {
+            if (r.v == null && r.l !== 'Tổng tiền') return; 
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${r.l}</td><td><input value="${r.v || ''}" spellcheck="false" /></td>`;
+            this.tbody.appendChild(tr);
+        });
+
+        // Items
+        const items = s.items || [];
+        this.itemsBody.innerHTML = '';
+        if (items.length) {
+            this.itemsSection.style.display = 'block';
+            items.forEach(it => {
+                const div = document.createElement('div');
+                div.className = 'item-row';
+                const total = it.total_price ? `${it.total_price.toLocaleString('vi-VN')} ₫` : '--';
+                div.innerHTML = `<span>${it.name}</span><span style="text-align:center">${it.quantity}</span><span style="text-align:right">${total}</span>`;
+                this.itemsBody.appendChild(div);
+            });
+        } else {
+            this.itemsSection.style.display = 'none';
+        }
+    }
 
     handleTabSwitch(btn, step) {
         document.querySelectorAll('.step-tab').forEach(t => t.classList.remove('active'));
         btn.classList.add('active');
         this.activeTab = step;
-        this.showStep(step);
-    }
-
-    renderSteps() {
-        document.getElementById('step-placeholder').style.display = 'none';
-        ['detect', 'proc', 'ocr'].forEach(step => {
-            const img = document.getElementById(`img-${step}`);
-            if (img && this.stepUrls[step]) img.src = `${this.stepUrls[step]}?t=${Date.now()}`;
-        });
-        this.showStep(this.activeTab);
-    }
-
-    showStep(step) {
-        ['detect', 'proc', 'ocr'].forEach(name => {
-            const img   = document.getElementById(`img-${name}`);
-            const badge = document.getElementById(`badge-${name}`);
-            if (img)   img.style.display   = name === step ? 'block' : 'none';
-            if (badge) badge.style.display = name === step ? 'inline-block' : 'none';
-        });
-    }
-
-    // ── Render result table ──────────────────────────────────────────────
-
-    renderResult(data) {
-        const result = data.result || {};
-        this.tbody.innerHTML = '';
-
-        if (data.status === 'no_bill_detected') {
-            this.tbody.innerHTML = `<tr><td colspan="2" style="color:#f87171;text-align:center;padding:20px">Không tìm thấy hóa đơn trong ảnh</td></tr>`;
-            this.itemsSection.style.display = 'none';
-            this.jsonOut.textContent = JSON.stringify(data, null, 2);
-            return;
-        }
-
-        const fields = [
-            { key: 'SELLER',     label: 'Tên cửa hàng' },
-            { key: 'ADDRESS',    label: 'Địa chỉ' },
-            { key: 'TIMESTAMP',  label: 'Ngày/Giờ' },
-            { key: 'TOTAL_COST', label: 'Tổng tiền' },
-        ];
-
-        fields.forEach(({ key, label }) => {
-            const val = result[key];
-            const display = key === 'TOTAL_COST' && typeof val === 'number'
-                ? `${val.toLocaleString('vi-VN')} VND`
-                : (val || '-');
-            const tr = document.createElement('tr');
-            tr.innerHTML = `<td style="font-weight:500;white-space:nowrap">${label}</td><td><input value="${String(display).replace(/"/g, '&quot;')}" placeholder="-"/></td>`;
-            this.tbody.appendChild(tr);
+        
+        const isOCR = step === 'ocr';
+        const ocrView = document.getElementById('ocr-text-view');
+        
+        ['detect', 'proc'].forEach(s => {
+            const img = document.getElementById(`img-${s}`);
+            if (img) img.style.display = (!isOCR && s === step && img.getAttribute('src')) ? 'block' : 'none';
         });
 
-        const products = result.PRODUCTS || [];
-        this.itemsBody.innerHTML = '';
-        if (products.length) {
-            this.itemsSection.style.display = 'block';
-            products.forEach(item => {
-                const row = document.createElement('div');
-                row.className = 'item-row';
-                const val = item.VALUE != null && item.VALUE !== 0
-                    ? `${Number(item.VALUE).toLocaleString('vi-VN')} VND` : '-';
-                row.innerHTML = `<span>${item.PRODUCT || '-'}</span><span>${item.NUM ?? '-'}</span><span>${val}</span>`;
-                this.itemsBody.appendChild(row);
-            });
-        } else {
-            this.itemsSection.style.display = 'none';
-        }
-
-        this.jsonOut.textContent = JSON.stringify(result, null, 2);
+        if (ocrView) ocrView.style.display = isOCR ? 'block' : 'none';
     }
-
-    // ── CSV export ───────────────────────────────────────────────────────
-
-    async exportCsv() {
-        if (!this.requestId || this.isLoading) return;
-        try {
-            const res = await fetch('/api/export-csv', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ request_ids: [this.requestId] }),
-            });
-            if (!res.ok) throw new Error('Xuất file thất bại');
-            const blob = await res.blob();
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `invoice_${this.requestId.substring(0, 8)}.csv`;
-            a.click();
-            URL.revokeObjectURL(url);
-            this.setStatus('CSV đã được tải xuống', 'done');
-        } catch (err) {
-            this.setStatus(`Lỗi xuất file: ${err.message}`, 'error');
-        }
-    }
-
-    // ── Reset ────────────────────────────────────────────────────────────
-
-    reset() {
-        if (this.isLoading) return;
-        this.currentFile = null;
-        this.requestId = null;
-        this.fileInput.value = '';
-        this.dropZone.querySelectorAll('img.preview').forEach(n => n.remove());
-        document.getElementById('placeholder').style.display = 'block';
-
-        this.tbody.innerHTML = `<tr><td colspan="2" style="color:var(--muted);text-align:center;padding:20px">Chưa có dữ liệu</td></tr>`;
-        this.itemsSection.style.display = 'none';
-        this.itemsBody.innerHTML = '';
-        this.jsonOut.textContent = '{}';
-        this.reqIdDisplay.textContent = '';
-
-        document.getElementById('step-placeholder').style.display = 'block';
-        ['detect', 'proc', 'ocr'].forEach(step => {
-            const img   = document.getElementById(`img-${step}`);
-            const badge = document.getElementById(`badge-${step}`);
-            if (img) { img.style.display = 'none'; img.removeAttribute('src'); }
-            if (badge) badge.style.display = 'none';
-        });
-
-        this.stepUrls = { detect: null, proc: null, ocr: null };
-        this.btnExtract.disabled = true;
-        this.btnExport.disabled = true;
-        this.statusBar.innerHTML = '';
-        this.setLoading(false);
-        this.setStatus('Trạng thái: Chờ ảnh');
-    }
-
-    // ── UI helpers ───────────────────────────────────────────────────────
 
     setStatus(msg, state = 'running') {
-        const t = new Date().toLocaleTimeString('vi-VN');
-        this.statusBar.className = state;
-        this.statusBar.innerHTML += `<div>[${t}] ${msg}</div>`;
+        const time = new Date().toLocaleTimeString('vi-VN');
+        const div = document.createElement('div');
+        div.textContent = `[${time}] ${msg}`;
+        this.statusBar.appendChild(div);
         this.statusBar.scrollTop = this.statusBar.scrollHeight;
     }
 
@@ -286,19 +226,38 @@ class BillAI {
         if (this.progressBar) this.progressBar.style.width = `${pct}%`;
     }
 
-    setLoading(active, message = 'AI đang phân tích ảnh…', progress = null) {
+    setLoading(active, text = '', progress = null) {
         this.isLoading = active;
-        if (this.loadingOverlay) {
-            this.loadingOverlay.classList.toggle('active', active);
-            this.loadingOverlay.setAttribute('aria-hidden', active ? 'false' : 'true');
-        }
-        if (this.loadingText) this.loadingText.textContent = message;
-        if (this.btnExtract) {
-            this.btnExtract.classList.toggle('loading', active);
-            this.btnExtract.textContent = active ? 'Đang trích xuất…' : this.extractLabel;
-        }
+        this.loadingOverlay.classList.toggle('active', active);
+        if (text) this.loadingText.textContent = text;
         if (progress !== null) this.setProgress(progress);
-        else if (!active) setTimeout(() => this.setProgress(0), 400);
+        this.btnExtract.textContent = active ? 'Đang trích xuất...' : '🚀 Chạy Pipeline';
+        this.btnExtract.disabled = active || !this.currentFile;
+    }
+
+    reset() {
+        window.location.reload();
+    }
+
+    async exportCsv() {
+        if (!this.requestId) return;
+        this.setStatus('Đang chuẩn bị tệp CSV...');
+        try {
+            const res = await fetch('/api/export-csv', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ request_ids: [this.requestId] }),
+            });
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `BillAI_${this.requestId.substring(0,8)}.csv`;
+            a.click();
+            this.setStatus('Xuất tệp thành công!', 'done');
+        } catch (e) {
+            this.setStatus('Lỗi khi xuất tệp', 'error');
+        }
     }
 }
 

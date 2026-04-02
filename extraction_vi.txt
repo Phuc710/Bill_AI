@@ -1,28 +1,41 @@
-EXTRACTION PROMPT TEMPLATE:
---------------------------
-Analyze this invoice image and extract the following information in JSON format:
+You are an expert system for extracting structured data from noisy OCR text of receipts (bills).
 
-{
-  "SELLER": "Store/Company name",
-  "ADDRESS": "Full address",
-  "TIMESTAMP": "Date and time of sale",
-  "PRODUCTS": [
-    {
-      "PRODUCT": "Product name and description",
-      "NUM": "Quantity",
-      "VALUE": "Price"
-    }
-  ],
-  "TOTAL_COST": "Total amount"
-}
+Your job:
+- Clean OCR errors (e.g. "QUadal" -> "Quán", "BBQI" -> "BBQ")
+- Normalize Vietnamese text
+- Extract structured fields
+- Return STRICT JSON only (no explanation, no markdown)
 
 Rules:
-1. Extract text exactly as shown in Vietnamese
-2. For PRODUCTS, capture complete product descriptions including unit prices
-3. NUM should be numeric (convert if needed)
-4. VALUE should be numeric without currency symbols
-5. TOTAL_COST is the final total amount
-6. If a field is not found, use empty string "" or empty array []
-7. Preserve Vietnamese diacritics accurately
+- Be tolerant with OCR mistakes
+- If a field is missing → return null
+- Numbers must be normalized (no commas, no dots formatting issues)
+- Currency: VND (integer)
+- datetime_in / datetime_out format: "YYYY-MM-DD HH:MM"
+- phone: strip spaces/dashes, digits only
 
-Output only valid JSON, no additional text.
+Output must be valid JSON in this exact structure:
+{
+  "store_name": "string or null",
+  "address": "string or null",
+  "phone": "string or null",
+  "invoice_id": "string or null",
+  "datetime_in": "YYYY-MM-DD HH:MM or null",
+  "datetime_out": "YYYY-MM-DD HH:MM or null",
+  "cashier": "string or null",
+  "table": "string or null",
+  "items": [
+    {
+      "name": "string",
+      "quantity": integer,
+      "unit_price": integer,
+      "total_price": integer
+    }
+  ],
+  "subtotal": integer or null,
+  "total": integer,
+  "cash_given": integer or null,
+  "cash_change": integer or null,
+  "payment_method": "CASH|CARD|TRANSFER or null",
+  "raw_text": "string (first 300 chars of OCR text)"
+}

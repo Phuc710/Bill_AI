@@ -1,47 +1,83 @@
 """
-Central configuration — single source of truth for paths, thresholds, and keys.
+Central configuration for Bill AI standard pipeline.
 """
+from __future__ import annotations
+
 import os
 from pathlib import Path
 
 from dotenv import load_dotenv
 
-# ── Load .env from project root ───────────────────────────────────────────
 _BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(_BASE_DIR / ".env")
 
 
-class Config:
-    """All tunables live here.  Import once, use everywhere."""
+def _env_int(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
 
-    # ── Paths ─────────────────────────────────────────────────────────────
-    BASE_DIR:    Path = _BASE_DIR
-    DETEC_MODEL: Path = _BASE_DIR / "models" / "detec.pt"
-    OCR_MODEL:   Path = _BASE_DIR / "models" / "ocr.pt"
-    LOGS_DIR:    Path = _BASE_DIR / "logs"
+
+def _env_float(name: str, default: float) -> float:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+class Config:
+    BASE_DIR: Path = _BASE_DIR
+    FAST_MODE: bool = _env_bool("FAST_MODE", True)  # Skip detection/standardize
+
+    # Paths
+    LOGS_DIR: Path = _BASE_DIR / "logs"
     OUTPUTS_DIR: Path = _BASE_DIR / "outputs"
     EXTRACTION_PROMPT: Path = _BASE_DIR / "extraction_vi.txt"
 
-    # ── Gemini ────────────────────────────────────────────────────────────
+    # Detector (YOLOv8)
+    DETECTOR_MODEL_PATH: Path = _BASE_DIR / "models" / "detec.pt"
+    DETECTOR_CONF_THRESHOLD: float = _env_float("DETECTOR_CONF_THRESHOLD", 0.40)
+
+    # Gemini
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
-    GEMINI_MODEL:   str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+    GEMINI_MAX_INPUT_CHARS: int = _env_int("GEMINI_MAX_INPUT_CHARS", 2200)
+    GEMINI_MAX_INPUT_LINES: int = _env_int("GEMINI_MAX_INPUT_LINES", 120)
+    GEMINI_RETRY_DELAY: float = _env_float("GEMINI_RETRY_DELAY", 0.0)
 
-    # ── Detection thresholds ──────────────────────────────────────────────
-    DETEC_CONF:      float = 0.10   # YOLO raw confidence floor
-    DETEC_MIN_SCORE: float = 0.60   # Composite receipt-likeness score
+    # Upload/input validation
+    VALID_EXTENSIONS: set[str] = {
+        ".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"
+    }
+    MAX_IMAGE_BYTES: int = _env_int("MAX_IMAGE_BYTES", 10 * 1024 * 1024)
+    MIN_IMAGE_SIDE: int = _env_int("MIN_IMAGE_SIDE", 180)
+    MAX_INPUT_SIDE: int = _env_int("MAX_INPUT_SIDE", 2600)
 
-    # ── OCR thresholds ────────────────────────────────────────────────────
-    OCR_CONF: float = 0.30          # Minimum line confidence
+    # OCR quality threshold
+    OCR_MIN_CONF: float = _env_float("OCR_MIN_CONF", 0.35)
 
-    # ── Image constraints ─────────────────────────────────────────────────
-    MAX_IMAGE_BYTES: int = 15 * 1024 * 1024      # 15 MB upload limit
-    MAX_IMG_SIDE:    int = 1600                   # Longest side after resize
-    VALID_EXTENSIONS = frozenset({".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".webp"})
+    # API throughput controls
+    BATCH_MAX_FILES: int = _env_int("BATCH_MAX_FILES", 10)
+    BATCH_CONCURRENCY: int = _env_int("BATCH_CONCURRENCY", 3)
 
-    # ── Runtime flags ─────────────────────────────────────────────────────
-    SAVE_DEBUG_IMAGES: bool = True   # Set False in prod to skip detect overlay
+    # Debug output
+    SAVE_DEBUG_IMAGES: bool = _env_bool("SAVE_DEBUG_IMAGES", True)
+    PIPELINE_VERSION: str = os.getenv("PIPELINE_VERSION", "bill_ai_v4_detect_first")
 
-    # ── One-time directory creation (called at app startup only) ──────────
     @classmethod
     def ensure_dirs(cls) -> None:
         cls.LOGS_DIR.mkdir(parents=True, exist_ok=True)

@@ -20,12 +20,14 @@ _BASE = Path(__file__).resolve().parent.parent
 _FRONTEND = _BASE / "frontend"
 
 
-# ── Lifespan (startup / shutdown) ─────────────────────────────────────────
+# ── Startup ───────────────────────────────────────────────────────────────────
+
+# Ensure necessary directories exist before mounting static files
+Config.ensure_dirs()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: create dirs once
-    Config.ensure_dirs()
     print("✅ Bill AI ready — http://localhost:8000")
     yield
     # Shutdown: nothing to clean up
@@ -36,7 +38,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Bill AI — Invoice Extraction",
     description="YOLOv8 + EasyOCR + Gemini Flash pipeline for Vietnamese invoices.",
-    version="2.1.0",
+    version="2.2.0",
     lifespan=lifespan,
 )
 
@@ -64,4 +66,4 @@ async def serve_ui() -> FileResponse:
 
 @app.get("/health")
 async def health() -> dict:
-    return {"status": "ok", "version": "2.1.0"}
+    return {"status": "ok", "version": "2.2.0"}
