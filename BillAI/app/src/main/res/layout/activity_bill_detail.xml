@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- BillDetailActivity: Hiển thị toàn bộ chi tiết 1 hóa đơn -->
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_light"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- Top bar -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="16dp"
+            android:background="@color/bg_light">
+
+            <ImageButton
+                android:id="@+id/btnBack"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:src="@android:drawable/ic_media_previous"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Quay lại"/>
+
+            <TextView
+                style="@style/PolarisAppTitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Chi tiết hóa đơn"
+                android:textSize="18sp"
+                android:layout_marginStart="8dp"/>
+
+            <ImageButton
+                android:id="@+id/btnDelete"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:src="@android:drawable/ic_menu_delete"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Xóa hóa đơn"/>
+        </LinearLayout>
+
+        <!-- Cropped image -->
+        <ImageView
+            android:id="@+id/ivCroppedImage"
+            android:layout_width="match_parent"
+            android:layout_height="200dp"
+            android:scaleType="centerCrop"
+            android:background="@color/bg_light"/>
+
+        <!-- Needs review warning -->
+        <TextView
+            android:id="@+id/tvNeedsReview"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="#FFF3CD"
+            android:padding="12dp"
+            android:text="⚠️  Kết quả cần kiểm tra lại"
+            android:textColor="#856404"
+            android:textSize="14sp"
+            android:visibility="gone"/>
+
+        <!-- Info Card -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="16dp"
+            android:layout_marginTop="16dp"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="2dp"
+            app:cardBackgroundColor="@color/bg_card">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="20dp">
+
+                <TextView
+                    android:id="@+id/tvStoreName"
+                    style="@style/PolarisAppTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Tên cửa hàng"
+                    android:textSize="20sp"/>
+
+                <TextView
+                    android:id="@+id/tvAddress"
+                    style="@style/PolarisAppSubText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Địa chỉ"/>
+
+                <TextView
+                    android:id="@+id/tvPhone"
+                    style="@style/PolarisAppSubText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="SĐT"/>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="@color/divider"
+                    android:layout_marginVertical="12dp"/>
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+                    <TextView style="@style/PolarisAppSubText" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="📅 Ngày"/>
+                    <TextView android:id="@+id/tvDatetime" style="@style/PolarisAppSubText" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="—"/>
+                </LinearLayout>
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="4dp">
+                    <TextView style="@style/PolarisAppSubText" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="🧾 Số HĐ"/>
+                    <TextView android:id="@+id/tvInvoiceId" style="@style/PolarisAppSubText" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="—"/>
+                </LinearLayout>
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Items Card -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="16dp"
+            android:layout_marginTop="12dp"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="2dp"
+            app:cardBackgroundColor="@color/bg_card">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="20dp">
+
+                <TextView
+                    style="@style/PolarisAppTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Các món"
+                    android:textSize="16sp"
+                    android:layout_marginBottom="12dp"/>
+
+                <!-- Items will be added programmatically via RecyclerView or LinearLayout -->
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/rvItems"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:nestedScrollingEnabled="false"/>
+
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/divider" android:layout_marginVertical="12dp"/>
+
+                <!-- Totals -->
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+                    <TextView style="@style/PolarisAppSubText" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Tổng cộng"/>
+                    <TextView android:id="@+id/tvTotal" style="@style/PolarisAppTitle" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="18sp" android:text="0đ"/>
+                </LinearLayout>
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="4dp">
+                    <TextView style="@style/PolarisAppSubText" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Tiền mặt"/>
+                    <TextView android:id="@+id/tvCashGiven" style="@style/PolarisAppSubText" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="—"/>
+                </LinearLayout>
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="4dp">
+                    <TextView style="@style/PolarisAppSubText" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Tiền thối"/>
+                    <TextView android:id="@+id/tvCashChange" style="@style/PolarisAppSubText" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="—"/>
+                </LinearLayout>
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="4dp">
+                    <TextView style="@style/PolarisAppSubText" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Thanh toán"/>
+                    <TextView android:id="@+id/tvPayment" style="@style/PolarisAppSubText" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="—"/>
+                </LinearLayout>
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Bottom padding -->
+        <View android:layout_width="match_parent" android:layout_height="32dp"/>
+
+    </LinearLayout>
+</ScrollView>

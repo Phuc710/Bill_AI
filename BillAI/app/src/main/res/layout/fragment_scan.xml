@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ScanFragment: Chọn ảnh từ gallery hoặc chụp ảnh, rồi upload -->
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_light">
+
+    <!-- Header -->
+    <TextView
+        android:id="@+id/tvHeader"
+        style="@style/PolarisAppTitle"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="Quét hóa đơn"
+        android:paddingHorizontal="20dp"
+        android:paddingTop="24dp"
+        android:paddingBottom="16dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"/>
+
+    <!-- Preview ảnh đã chọn -->
+    <ImageView
+        android:id="@+id/ivPreview"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:scaleType="centerInside"
+        android:background="@color/divider"
+        android:src="@android:drawable/ic_menu_camera"
+        android:contentDescription="Preview ảnh hóa đơn"
+        app:layout_constraintBottom_toTopOf="@+id/cardActions"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/tvHeader"/>
+
+    <!-- Hint text khi chưa chọn ảnh -->
+    <TextView
+        android:id="@+id/tvHint"
+        style="@style/PolarisAppSubText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Chọn hoặc chụp ảnh hóa đơn"
+        android:gravity="center"
+        app:layout_constraintBottom_toTopOf="@+id/cardActions"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/tvHeader"/>
+
+    <!-- Processing overlay (visible when uploading) -->
+    <LinearLayout
+        android:id="@+id/layoutProcessing"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:background="#CC000000"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@+id/cardActions"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/tvHeader">
+
+        <ProgressBar
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:indeterminateTint="#FFFFFF"/>
+
+        <TextView
+            android:id="@+id/tvProcessingStep"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Đang xử lý..."
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:layout_marginTop="16dp"/>
+    </LinearLayout>
+
+    <!-- Action Card -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/cardActions"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginBottom="24dp"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="2dp"
+        app:cardBackgroundColor="@color/bg_card"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="20dp">
+
+            <!-- Gallery Button -->
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btnPickGallery"
+                style="@style/PolarisButton"
+                android:layout_width="match_parent"
+                android:layout_height="50dp"
+                android:text="📁  Chọn từ thư viện"/>
+
+            <!-- Camera Button -->
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btnCamera"
+                android:layout_width="match_parent"
+                android:layout_height="50dp"
+                android:layout_marginTop="10dp"
+                android:text="📷  Chụp ảnh"
+                android:background="@color/bg_light"
+                android:textColor="@color/text_main"
+                android:textAllCaps="false"
+                android:textSize="15sp"/>
+
+            <!-- Upload Button - chỉ hiện khi đã có ảnh -->
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btnUpload"
+                style="@style/PolarisButton"
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:layout_marginTop="12dp"
+                android:text="✅  Xử lý hóa đơn"
+                android:visibility="gone"/>
+
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

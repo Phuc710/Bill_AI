@@ -1,5 +1,5 @@
 """
-Clean Invoice API routes.
+Invoice API routes.
 """
 from __future__ import annotations
 
@@ -38,7 +38,12 @@ def _safe_json_loads(raw: Optional[str]) -> Dict[str, Any]:
         return {}
 
 
-@router.post("/process", response_model=PipelineResponse)
+@router.post(
+    "/process",
+    response_model=PipelineResponse,
+    summary="Xử lý 1 hóa đơn",
+    description="Upload 1 ảnh hóa đơn, hệ thống sẽ chạy qua pipeline Detection -> Standardize -> OCR -> Gemini.",
+)
 async def process_invoice(
     file: UploadFile = File(...),
     user_id: str = Form(default=""),
@@ -68,7 +73,12 @@ async def process_invoice(
     return PipelineResponse(**result)
 
 
-@router.post("/process-batch", response_model=BatchProcessResponse)
+@router.post(
+    "/process-batch",
+    response_model=BatchProcessResponse,
+    summary="Xử lý hàng loạt",
+    description="Upload nhiều ảnh cùng lúc, hệ thống sẽ xử lý song song để tối ưu tốc độ.",
+)
 async def process_batch(
     files: list[UploadFile] = File(...),
     user_id: str = Form(default=""),
@@ -100,7 +110,7 @@ async def process_batch(
             )
             return PipelineResponse(**payload)
 
-    tasks = [_run_one(f) for f in files]
+    tasks = [_run_one(file) for file in files]
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
     responses: list[PipelineResponse] = []
@@ -122,6 +132,8 @@ async def process_batch(
                     raw=None,
                     meta=None,
                     orig_image=None,
+                    detect_image=None,
+                    proc_image=None,
                     log_path="",
                 )
             )
@@ -141,7 +153,12 @@ async def process_batch(
     )
 
 
-@router.get("/result/{request_id}", response_model=PipelineResponse)
+@router.get(
+    "/result/{request_id}",
+    response_model=PipelineResponse,
+    summary="Xem kết quả cũ",
+    description="Tra cứu lại thông tin hóa đơn đã xử lý dựa trên Request ID (lấy từ log hệ thống).",
+)
 async def get_result(request_id: str) -> PipelineResponse:
     log_path = Config.LOGS_DIR / f"{request_id}.json"
     if not log_path.exists():
@@ -158,13 +175,19 @@ async def get_result(request_id: str) -> PipelineResponse:
         "structured": data.get("structured"),
         "raw": data.get("raw"),
         "meta": data.get("meta"),
-        "orig_image": data.get("original_image"),
+        "orig_image": data.get("orig_image"),
+        "detect_image": data.get("detector_image"),
+        "proc_image": data.get("proc_image"),
         "log_path": str(log_path),
     }
     return PipelineResponse(**payload)
 
 
-@router.post("/export-csv")
+@router.post(
+    "/export-csv",
+    summary="Xuất CSV",
+    description="Nhận danh sách Request ID và trả về file CSV chứa thông tin tổng hợp.",
+)
 async def export_csv(body: ExportRequest) -> StreamingResponse:
     rows: list[dict] = []
     for req_id in body.request_ids:

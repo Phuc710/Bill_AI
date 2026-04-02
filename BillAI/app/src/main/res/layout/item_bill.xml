@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- item_bill.xml: Card item cho RecyclerView danh sách hóa đơn -->
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="12dp"
+    app:cardCornerRadius="16dp"
+    app:cardElevation="2dp"
+    app:cardBackgroundColor="@color/bg_card"
+    android:foreground="?attr/selectableItemBackground">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="16dp">
+
+        <!-- Ảnh crop thumbnail -->
+        <ImageView
+            android:id="@+id/ivCroppedThumb"
+            android:layout_width="56dp"
+            android:layout_height="72dp"
+            android:scaleType="centerCrop"
+            android:background="@color/bg_light"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"/>
+
+        <!-- Store name -->
+        <TextView
+            android:id="@+id/tvStoreName"
+            style="@style/PolarisAppTitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:textSize="15sp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="Tên cửa hàng"
+            android:layout_marginStart="14dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toEndOf="@+id/ivCroppedThumb"
+            app:layout_constraintTop_toTopOf="@+id/ivCroppedThumb"/>
+
+        <!-- Date -->
+        <TextView
+            android:id="@+id/tvDate"
+            style="@style/PolarisAppSubText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="02/04/2026"
+            android:layout_marginTop="4dp"
+            android:layout_marginStart="14dp"
+            app:layout_constraintEnd_toStartOf="@+id/tvTotal"
+            app:layout_constraintStart_toEndOf="@+id/ivCroppedThumb"
+            app:layout_constraintTop_toBottomOf="@+id/tvStoreName"/>
+
+        <!-- Total amount (right aligned) -->
+        <TextView
+            android:id="@+id/tvTotal"
+            style="@style/PolarisAppTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="15sp"
+            android:textColor="@color/text_main"
+            android:text="636,000đ"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="@+id/ivCroppedThumb"/>
+
+        <!-- Status chip (failed bills) -->
+        <TextView
+            android:id="@+id/tvStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="11sp"
+            android:textColor="@color/error_red"
+            android:visibility="gone"
+            android:text="Cần kiểm tra"
+            android:layout_marginTop="4dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/tvTotal"/>
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</com.google.android.material.card.MaterialCardView>

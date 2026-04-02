@@ -1,0 +1,4 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Force light theme even in dark mode for SaaS Polaris clean UI consistency -->
+    <style name="Theme.MyApplication" parent="Base.Theme.MyApplication" />
+</resources>

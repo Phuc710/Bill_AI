@@ -1,6 +1,5 @@
 """
-PipelineTracker — per-request timing and structured logs.
-Supports: input, precheck, detect, standardize, ocr, gemini steps.
+Per-request pipeline logging and timing.
 """
 from __future__ import annotations
 
@@ -38,27 +37,22 @@ class PipelineTracker:
             "status": "running",
             "message": "",
             "timing_ms": {},
-            # images
             "orig_image": None,
+            "detector_image": None,
             "proc_image": None,
-            # detection
             "detector_bbox": None,
             "detector_confidence": None,
+            "detector_source": None,
             "bill_count": 0,
-            # ocr
             "ocr_raw_text": "",
-            "ocr_cleaned_text": "",
             "ocr_confidence_avg": 0.0,
-            # extraction
             "gemini_raw": "",
-            # output
             "result": None,
             "structured": None,
             "validation": {},
             "raw": None,
             "meta": None,
             "error": None,
-            # input / precheck
             "input": {},
             "precheck": {},
         }
@@ -80,6 +74,9 @@ class PipelineTracker:
     def set_orig_image(self, url: Optional[str]) -> None:
         self._log["orig_image"] = url
 
+    def set_detect_image(self, url: Optional[str]) -> None:
+        self._log["detector_image"] = url
+
     def set_proc_image(self, url: Optional[str]) -> None:
         self._log["proc_image"] = url
 
@@ -88,14 +85,15 @@ class PipelineTracker:
         bbox: Optional[List[int]],
         confidence: Optional[float],
         bill_count: int,
+        source: Optional[str] = None,
     ) -> None:
         self._log["detector_bbox"] = bbox
         self._log["detector_confidence"] = confidence
+        self._log["detector_source"] = source
         self._log["bill_count"] = bill_count
 
-    def set_ocr(self, raw_text: str, cleaned_text: str, confidence_avg: float) -> None:
+    def set_ocr(self, raw_text: str, confidence_avg: float) -> None:
         self._log["ocr_raw_text"] = raw_text
-        self._log["ocr_cleaned_text"] = cleaned_text
         self._log["ocr_confidence_avg"] = round(float(confidence_avg), 4)
 
     def set_gemini(self, raw_response: str) -> None:
@@ -117,14 +115,18 @@ class PipelineTracker:
         self._log["meta"] = meta
 
     def set_status(
-        self, status: str, message: str = "", error: Optional[str] = None
+        self,
+        status: str,
+        message: str = "",
+        error: Optional[str] = None,
     ) -> None:
         self._log["status"] = status
         self._log["message"] = message
         if error:
             self._log["error"] = error
         self._log["timing_ms"]["total"] = round(
-            (time.perf_counter() - self._t0) * 1000.0, 1
+            (time.perf_counter() - self._t0) * 1000.0,
+            1,
         )
 
     def total_ms(self) -> float:

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- SaaS Polaris Color Palette -->
+    <color name="bg_light">#F9FAFB</color>
+    <color name="bg_card">#FFFFFF</color>
+    
+    <color name="primary_button">#303030</color>
+    <color name="primary_button_text">#FFFFFF</color>
+    
+    <color name="accent_indigo">#4F46E5</color>
+    <color name="secondary_green">#22C55E</color>
+    <color name="error_red">#EF4444</color>
+    
+    <color name="text_main">#111827</color>
+    <color name="text_sub">#6B7280</color>
+    <color name="divider">#E5E7EB</color>
+    
+    <!-- Adaptive icon background -->
+    <color name="icon_bg">#FFFFFF</color>
+
+    <!-- Needed for material design defaults but customized to our palette -->
+    <color name="colorPrimary">#303030</color>
+    <color name="colorPrimaryVariant">#111827</color>
+    <color name="colorOnPrimary">#FFFFFF</color>
+    
+    <!-- Same simple theme for night/dark (Force Light UI for Polaris consistency) -->
+</resources>

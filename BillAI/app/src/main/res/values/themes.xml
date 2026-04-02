@@ -1,0 +1,24 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme. -->
+    <style name="Base.Theme.MyApplication" parent="Theme.Material3.Light.NoActionBar">
+        <item name="colorPrimary">@color/primary_button</item>
+        <item name="colorPrimaryVariant">@color/text_main</item>
+        <item name="colorOnPrimary">@color/primary_button_text</item>
+        
+        <item name="colorSecondary">@color/accent_indigo</item>
+        <item name="colorSecondaryVariant">@color/accent_indigo</item>
+        <item name="colorOnSecondary">@color/primary_button_text</item>
+        
+        <!-- Status bar color. -->
+        <item name="android:statusBarColor">@color/bg_light</item>
+        <item name="android:windowLightStatusBar">true</item>
+        
+        <!-- Force background -->
+        <item name="android:windowBackground">@color/bg_light</item>
+        
+        <!-- Typography: Keep standard sans-serif for clean look -->
+        <item name="android:fontFamily">sans-serif</item>
+    </style>
+
+    <style name="Theme.MyApplication" parent="Base.Theme.MyApplication" />
+</resources>
