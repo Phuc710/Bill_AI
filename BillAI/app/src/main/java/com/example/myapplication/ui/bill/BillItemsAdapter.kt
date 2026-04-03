@@ -36,7 +36,7 @@ class BillItemsAdapter : ListAdapter<BillItem, BillItemsAdapter.ItemViewHolder>(
         }
 
         private fun formatCurrency(amount: Long): String {
-            return NumberFormat.getNumberInstance(Locale("vi", "VN")).format(amount) + "đ"
+            return NumberFormat.getNumberInstance(Locale.forLanguageTag("vi-VN")).format(amount) + "đ"
         }
     }
 

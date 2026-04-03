@@ -1,11 +1,11 @@
 """
-Invoice Pipeline — Final Production Flow.
+Invoice Pipeline — Production Flow.
 
-  Upload -> Detect -> Crop -> OCR -> [Smart Exit] -> Gemini -> Save to Supabase
+  Upload → Detect (YOLO) → Crop → OCR (VnCV) → Gemini AI → Save to Supabase
 
 DB status transitions:
-  uploaded -> detecting -> cropping -> ocr_done -> normalizing -> completed
-                                                               -> failed
+  uploaded → detecting → cropping → ocr_done → normalizing → completed
+                                                            → failed
 """
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ class InvoicePipeline:
         log.info(f"[{bill_id}] Pipeline START | file={filename} user={user_id}")
 
         try:
-            DatabaseService.create_bill(bill_id, user_id)
+            DatabaseService.create_invoice(bill_id, user_id)
         except Exception as exc:
             log.error(f"[{bill_id}] DB create failed, aborting: {exc}")
             return self._error_response(bill_id, "DB error", "db_init")
@@ -117,7 +117,7 @@ class InvoicePipeline:
             needs_review = self._needs_review(structured, region.confidence, ocr.confidence_avg, error_type)
 
             DatabaseService.save_result(
-                bill_id=bill_id,
+                invoice_id=bill_id,
                 structured=structured,
                 items=items,
                 ocr_raw_text=ocr.text_raw or "",

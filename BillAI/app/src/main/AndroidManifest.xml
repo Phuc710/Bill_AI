@@ -2,9 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
 
     <application
@@ -16,46 +14,31 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.MyApplication"
-        android:usesCleartextTraffic="true"> <!-- Needed for http://10.0.2.2 testing -->
+        android:usesCleartextTraffic="true">
         
-        <!-- SplashActivity is the true entry point -->
-        <activity
-            android:name=".ui.auth.SplashActivity"
-            android:exported="true"
-            android:theme="@style/Theme.MyApplication">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
-
-        <!-- LoginActivity catches deep link from Supabase -->
         <activity
             android:name=".ui.auth.LoginActivity"
             android:exported="true"
             android:launchMode="singleTask">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
 
-            <!-- Supabase OAuth Deep Link Receiver -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <!-- Matches: billai://callback -->
+                <!-- Host: auth, Path: /callback => billai://auth/callback -->
                 <data
                     android:scheme="billai"
-                    android:host="callback" />
+                    android:host="auth"
+                    android:path="/callback" />
             </intent-filter>
         </activity>
 
-        <activity
-            android:name=".ui.main.MainActivity"
-            android:exported="false">
-        </activity>
-
-        <activity
-            android:name=".ui.bill.BillDetailActivity"
-            android:exported="false">
-        </activity>
+        <activity android:name=".ui.main.MainActivity" android:exported="true" />
+        <activity android:name=".ui.bill.BillDetailActivity" android:exported="false" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

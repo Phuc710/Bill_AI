@@ -90,7 +90,7 @@ async def list_bills(
     status: Optional[str] = Query(None, description="Lọc theo trạng thái"),
 ) -> dict:
     result = await run_in_threadpool(
-        DatabaseService.list_bills, user_id, page, limit, status
+        DatabaseService.list_invoices, user_id, page, limit, status
     )
     return result
 
@@ -108,7 +108,7 @@ async def export_range_csv(
     to_date: str   = Query(..., alias="to",   description="YYYY-MM-DD"),
 ) -> StreamingResponse:
     bills = await run_in_threadpool(
-        DatabaseService.list_bills_by_date, user_id, from_date, to_date
+        DatabaseService.list_invoices_by_date, user_id, from_date, to_date
     )
     if not bills:
         raise HTTPException(404, "Không có hóa đơn nào trong khoảng thời gian này.")
@@ -123,7 +123,7 @@ async def export_range_csv(
     description="Lấy toàn bộ thông tin của 1 hóa đơn, bao gồm danh sách món.",
 )
 async def get_bill(bill_id: str) -> dict:
-    bill = await run_in_threadpool(DatabaseService.get_bill, bill_id)
+    bill = await run_in_threadpool(DatabaseService.get_invoice, bill_id)
     if not bill:
         raise HTTPException(404, f"Không tìm thấy hóa đơn: {bill_id}")
     return _format_bill(bill)
@@ -137,9 +137,9 @@ async def get_bill(bill_id: str) -> dict:
     description="Xóa hóa đơn khỏi database và các ảnh liên quan trên Storage.",
 )
 async def delete_bill(bill_id: str) -> dict:
-    # Try to delete images from storage first
+    # Xóa ảnh trên Storage trước, sau đó xóa DB
     await run_in_threadpool(StorageService.delete_images, bill_id)
-    ok = await run_in_threadpool(DatabaseService.delete_bill, bill_id)
+    ok = await run_in_threadpool(DatabaseService.delete_invoice, bill_id)
     if not ok:
         raise HTTPException(500, "Xóa hóa đơn thất bại.")
     return {"success": True, "bill_id": bill_id}
@@ -152,7 +152,7 @@ async def delete_bill(bill_id: str) -> dict:
     summary="Export 1 hóa đơn ra CSV",
 )
 async def export_bill_csv(bill_id: str) -> StreamingResponse:
-    bill = await run_in_threadpool(DatabaseService.get_bill, bill_id)
+    bill = await run_in_threadpool(DatabaseService.get_invoice, bill_id)
     if not bill:
         raise HTTPException(404, f"Không tìm thấy hóa đơn: {bill_id}")
 
@@ -183,7 +183,7 @@ async def export_bill_csv(bill_id: str) -> StreamingResponse:
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _format_bill(bill: dict) -> dict:
-    """Map DB row to the standard API response format."""
+    """Map DB row → chuẩn API response cho Android client."""
     return {
         "bill_id": bill.get("id"),
         "status":  bill.get("status"),
@@ -191,20 +191,20 @@ def _format_bill(bill: dict) -> dict:
         "cropped_image_url":  bill.get("cropped_image_url"),
         "data": {
             "store_name":     bill.get("store_name"),
-            "address":        bill.get("address"),
-            "phone":          bill.get("phone"),
-            "invoice_id":     bill.get("invoice_code"),
-            "datetime":       str(bill.get("datetime_in") or ""),
-            "total":          bill.get("total", 0),
+            "address":        bill.get("store_address"),
+            "phone":          bill.get("store_phone"),
+            "invoice_id":     bill.get("invoice_number"),
+            "datetime":       str(bill.get("issued_at") or ""),
+            "total":          bill.get("total_amount", 0),
             "subtotal":       bill.get("subtotal"),
-            "cash_given":     bill.get("cash_given"),
+            "cash_given":     bill.get("cash_tendered"),
             "cash_change":    bill.get("cash_change"),
             "payment_method": bill.get("payment_method"),
             "currency":       bill.get("currency", "VND"),
         },
         "items": [
             {
-                "name":        i.get("name"),
+                "name":        i.get("item_name"),
                 "quantity":    i.get("quantity"),
                 "unit_price":  i.get("unit_price"),
                 "total_price": i.get("total_price"),
@@ -215,7 +215,7 @@ def _format_bill(bill: dict) -> dict:
             "needs_review":      bill.get("needs_review", False),
             "detect_confidence": bill.get("detect_confidence", 0),
             "ocr_confidence":    bill.get("ocr_confidence", 0),
-            "processing_ms":     bill.get("processing_ms", 0),
+            "processing_ms":     bill.get("processing_time_ms", 0),
             "created_at":        str(bill.get("created_at", "")),
             "failed_step":       bill.get("failed_step"),
         },

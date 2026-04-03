@@ -2,6 +2,8 @@ package com.example.myapplication.ui.main
 
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
 import com.example.myapplication.R
 import com.example.myapplication.databinding.ActivityMainBinding
@@ -11,11 +13,12 @@ import com.example.myapplication.ui.scan.ScanFragment
 
 /**
  * MainActivity — Khung chứa Bottom Navigation.
- * 3 tabs: Lịch sử | Quét bill | Tài khoản
+ * Quản lý 3 tabs chính: Lịch sử, Quét, và Cá nhân.
  */
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
+    private var currentTabId: Int = -1
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -24,23 +27,41 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Show History tab by default
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { v, insets ->
+            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
+            insets
+        }
+
+        // Thiết lập tab mặc định là Quét bill
         if (savedInstanceState == null) {
-            showFragment(HistoryFragment())
+            binding.bottomNav.selectedItemId = R.id.navScan
+            navigateToTab(R.id.navScan)
         }
 
         binding.bottomNav.setOnItemSelectedListener { item ->
-            when (item.itemId) {
-                R.id.navHistory -> showFragment(HistoryFragment())
-                R.id.navScan    -> showFragment(ScanFragment())
-                R.id.navProfile -> showFragment(ProfileFragment())
-            }
+            navigateToTab(item.itemId)
             true
         }
     }
 
-    private fun showFragment(fragment: Fragment) {
+    /**
+     * Chuyển tab thông minh: 
+     * Chỉ thay thế Fragment nếu tab được chọn khác với tab hiện tại.
+     */
+    private fun navigateToTab(itemId: Int) {
+        if (currentTabId == itemId) return // Đang ở tab này rồi, không làm gì cả
+        
+        val fragment: Fragment = when (itemId) {
+            R.id.navHistory -> HistoryFragment()
+            R.id.navScan    -> ScanFragment()
+            R.id.navProfile -> ProfileFragment()
+            else -> return
+        }
+
+        currentTabId = itemId
         supportFragmentManager.beginTransaction()
+            .setCustomAnimations(android.R.anim.fade_in, android.R.anim.fade_out)
             .replace(R.id.fragmentContainer, fragment)
             .commit()
     }

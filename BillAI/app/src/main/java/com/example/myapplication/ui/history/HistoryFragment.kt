@@ -72,7 +72,6 @@ class HistoryFragment : Fragment() {
                 },
                 onFailure = {
                     binding.progressLoading.visibility = View.GONE
-                    binding.tvEmpty.text = "Lỗi tải dữ liệu"
                     binding.tvEmpty.visibility = View.VISIBLE
                 }
             )

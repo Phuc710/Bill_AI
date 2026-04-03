@@ -8,19 +8,32 @@
     android:background="@color/bg_light">
 
     <!-- Header -->
-    <TextView
-        android:id="@+id/tvHeader"
-        style="@style/PolarisAppTitle"
+    <LinearLayout
+        android:id="@+id/layoutHeader"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:text="Hóa đơn của tôi"
-        android:paddingHorizontal="20dp"
-        android:paddingTop="24dp"
+        android:orientation="vertical"
+        android:paddingHorizontal="24dp"
+        android:paddingTop="28dp"
         android:paddingBottom="16dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"/>
-
+        app:layout_constraintTop_toTopOf="parent">
+        
+        <TextView
+            android:id="@+id/tvHeader"
+            style="@style/PolarisAppTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Dashboard"/>
+            
+        <TextView
+            style="@style/PolarisAppSubText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Quản lý lịch sử quét hóa đơn"/>
+    </LinearLayout>
     <!-- Divider -->
     <View
         android:id="@+id/divider"
@@ -29,7 +42,7 @@
         android:background="@color/divider"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/tvHeader"/>
+        app:layout_constraintTop_toBottomOf="@+id/layoutHeader"/>
 
     <!-- Loading -->
     <ProgressBar
@@ -44,26 +57,57 @@
         app:layout_constraintTop_toTopOf="parent"/>
 
     <!-- Empty state -->
-    <TextView
+    <LinearLayout
         android:id="@+id/tvEmpty"
-        style="@style/PolarisAppSubText"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Chưa có hóa đơn nào"
+        android:orientation="vertical"
+        android:gravity="center"
         android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"/>
-
+        app:layout_constraintTop_toTopOf="parent">
+        
+        <FrameLayout
+            android:layout_width="80dp"
+            android:layout_height="80dp"
+            android:background="@drawable/bg_card"
+            android:backgroundTint="@color/accent_indigo_soft"
+            app:cardCornerRadius="4dp"
+            android:layout_marginBottom="16dp">
+            
+            <ImageView
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_gravity="center"
+                android:src="@android:drawable/ic_menu_recent_history"
+                app:tint="@color/accent_indigo"/>
+        </FrameLayout>
+        
+        <TextView
+            style="@style/PolarisAppTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Trống rỗng!"
+            android:textSize="18sp"/>
+            
+        <TextView
+            style="@style/PolarisAppSubText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Chưa có hóa đơn nào, hãy tiếp tục quét nha"
+            android:gravity="center"/>
+    </LinearLayout>
     <!-- Bill List -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rvBills"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:paddingHorizontal="16dp"
-        android:paddingTop="8dp"
-        android:paddingBottom="16dp"
+        android:paddingHorizontal="24dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="24dp"
         android:clipToPadding="false"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"

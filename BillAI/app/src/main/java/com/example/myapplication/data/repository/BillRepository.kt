@@ -39,7 +39,7 @@ class BillRepository {
     suspend fun listBills(userId: String, page: Int = 1, limit: Int = 20): Result<ListBillsResponse> {
         return try {
             val token = SupabaseManager.auth.currentAccessTokenOrNull() ?: supabaseKey
-            val url = "$supabaseUrl/rest/v1/v_bills_summary"
+            val url = "$supabaseUrl/rest/v1/v_invoice_summary"
             val response = supabaseApi.listBills(url, supabaseKey, "Bearer $token", "eq.$userId")
             if (response.isSuccessful && response.body() != null) {
                 Result.success(ListBillsResponse(response.body()!!, page, limit))
@@ -55,7 +55,7 @@ class BillRepository {
     suspend fun getBillDetail(billId: String): Result<BillResponse> {
         return try {
             val token = SupabaseManager.auth.currentAccessTokenOrNull() ?: supabaseKey
-            val url = "$supabaseUrl/rest/v1/bills"
+            val url = "$supabaseUrl/rest/v1/invoices"
             val response = supabaseApi.getBillDetails(url, supabaseKey, "Bearer $token", "eq.$billId")
             
             if (response.isSuccessful && response.body() != null) {
@@ -67,7 +67,7 @@ class BillRepository {
                 val rawItems = row["items"] as? List<Map<String, Any>> ?: emptyList()
                 val parsedItems = rawItems.map {
                     com.example.myapplication.data.model.BillItem(
-                        name = it["name"] as? String ?: "",
+                        name = it["item_name"] as? String ?: "",
                         quantity = (it["quantity"] as? Number)?.toInt() ?: 1,
                         unit_price = (it["unit_price"] as? Number)?.toLong() ?: 0L,
                         total_price = (it["total_price"] as? Number)?.toLong() ?: 0L
@@ -77,13 +77,13 @@ class BillRepository {
                 // Map row to BillResponse format
                 val billData = com.example.myapplication.data.model.BillData(
                     store_name = row["store_name"] as? String,
-                    address = row["address"] as? String,
-                    phone = row["phone"] as? String,
-                    invoice_id = row["invoice_code"] as? String,
-                    datetime = row["datetime_in"] as? String,
-                    total = (row["total"] as? Number)?.toLong() ?: 0L,
+                    address = row["store_address"] as? String,
+                    phone = row["store_phone"] as? String,
+                    invoice_id = row["invoice_number"] as? String,
+                    datetime = row["issued_at"] as? String,
+                    total = (row["total_amount"] as? Number)?.toLong() ?: 0L,
                     subtotal = (row["subtotal"] as? Number)?.toLong(),
-                    cash_given = (row["cash_given"] as? Number)?.toLong(),
+                    cash_given = (row["cash_tendered"] as? Number)?.toLong(),
                     cash_change = (row["cash_change"] as? Number)?.toLong(),
                     payment_method = row["payment_method"] as? String,
                     currency = row["currency"] as? String
@@ -92,7 +92,7 @@ class BillRepository {
                 val billMeta = com.example.myapplication.data.model.BillMeta(
                     needs_review = row["needs_review"] as? Boolean ?: false,
                     detect_confidence = (row["detect_confidence"] as? Number)?.toDouble() ?: 0.0,
-                    processing_ms = (row["processing_ms"] as? Number)?.toDouble() ?: 0.0,
+                    processing_ms = (row["processing_time_ms"] as? Number)?.toDouble() ?: 0.0,
                     gemini_error = row["error_message"] as? String
                 )
                 
@@ -120,7 +120,7 @@ class BillRepository {
     suspend fun deleteBill(billId: String): Result<Boolean> {
         return try {
             val token = SupabaseManager.auth.currentAccessTokenOrNull() ?: supabaseKey
-            val url = "$supabaseUrl/rest/v1/bills"
+            val url = "$supabaseUrl/rest/v1/invoices"
             val response = supabaseApi.deleteBill(url, supabaseKey, "Bearer $token", "eq.$billId")
             
             if (response.isSuccessful) {

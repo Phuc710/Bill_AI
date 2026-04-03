@@ -10,12 +10,16 @@ import logging
 import sys
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import APIKeyHeader
 
 from api.middleware import AuthLoggingMiddleware
 from api.routes.bills import router as bills_router
 from core.config import Config
+
+# Header definition for Swagger UI
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 # ── Logging setup ─────────────────────────────────────────────────────────────
 
@@ -80,6 +84,7 @@ Mọi request phải có header: `X-API-Key: <secret>`
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",
+    dependencies=[Depends(api_key_header)],
 )
 
 # ── Middleware ────────────────────────────────────────────────────────────────

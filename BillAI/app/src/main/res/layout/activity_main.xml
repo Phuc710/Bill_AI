@@ -12,19 +12,20 @@
         android:id="@+id/fragmentContainer"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:paddingBottom="64dp"/>
+        android:paddingBottom="80dp"/>
 
     <!-- Bottom Navigation -->
     <com.google.android.material.bottomnavigation.BottomNavigationView
         android:id="@+id/bottomNav"
         android:layout_width="match_parent"
-        android:layout_height="64dp"
+        android:layout_height="wrap_content"
         android:layout_gravity="bottom"
         android:background="@color/bg_card"
         app:menu="@menu/bottom_nav_menu"
         app:itemIconTint="@color/bottom_nav_color"
         app:itemTextColor="@color/bottom_nav_color"
         app:labelVisibilityMode="labeled"
-        app:elevation="8dp"/>
+        app:itemIndicatorColor="@android:color/transparent"
+        app:elevation="0dp"/>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

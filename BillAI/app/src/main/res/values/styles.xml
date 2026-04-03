@@ -1,35 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Polaris SaaS Button Outline/Solid -->
+    <!-- Polaris SaaS Button Solid -->
     <style name="PolarisButton" parent="Widget.AppCompat.Button">
         <item name="android:background">@drawable/bg_polaris_button</item>
         <item name="android:textColor">@color/primary_button_text</item>
         <item name="android:textAllCaps">false</item>
-        <item name="android:textSize">16sp</item>
-        <!-- Medium equivalent weight if font supports it or textStyle bold -->
-        <item name="android:textStyle">normal</item>
-        <item name="android:paddingStart">12dp</item>
-        <item name="android:paddingEnd">12dp</item>
-        <item name="android:paddingTop">6dp</item>
-        <item name="android:paddingBottom">6dp</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:paddingStart">16dp</item>
+        <item name="android:paddingEnd">16dp</item>
+        <item name="android:paddingTop">12dp</item>
+        <item name="android:paddingBottom">12dp</item>
         <item name="fontFamily">sans-serif-medium</item>
+        <item name="android:letterSpacing">0.01</item>
     </style>
 
     <style name="PolarisCard">
         <item name="android:background">@drawable/bg_card</item>
-        <item name="android:elevation">2dp</item>
+        <item name="android:elevation">0dp</item>
     </style>
     
     <style name="PolarisAppTitle">
         <item name="android:textColor">@color/text_main</item>
-        <item name="android:textSize">22sp</item>
+        <item name="android:textSize">20sp</item>
         <item name="fontFamily">sans-serif-medium</item>
         <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">-0.02</item> <!-- SaaS modern tight heading -->
     </style>
 
     <style name="PolarisAppSubText">
         <item name="android:textColor">@color/text_sub</item>
         <item name="android:textSize">14sp</item>
         <item name="fontFamily">sans-serif</item>
+        <item name="android:letterSpacing">0.01</item>
     </style>
 </resources>

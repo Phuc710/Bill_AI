@@ -8,7 +8,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.bumptech.glide.Glide
-import com.example.myapplication.data.model.BillItem
 import com.example.myapplication.data.model.BillResponse
 import com.example.myapplication.data.repository.BillRepository
 import com.example.myapplication.databinding.ActivityBillDetailBinding
@@ -16,11 +15,6 @@ import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.Locale
 
-/**
- * BillDetailActivity — hiển thị chi tiết 1 hóa đơn.
- * Nhận bill_id qua Intent extra, gọi API lấy full data.
- * Hiển thị: ảnh crop, thông tin cửa hàng, danh sách món, tổng tiền.
- */
 class BillDetailActivity : AppCompatActivity() {
 
     companion object {
@@ -70,37 +64,30 @@ class BillDetailActivity : AppCompatActivity() {
     private fun renderBill(bill: BillResponse) {
         val data = bill.data
 
-        // Cropped image
         if (!bill.cropped_image_url.isNullOrBlank()) {
             Glide.with(this).load(bill.cropped_image_url).centerCrop().into(binding.ivCroppedImage)
         }
 
-        // Needs review warning
         if (bill.meta?.needs_review == true || bill.status == "failed") {
             binding.tvNeedsReview.visibility = View.VISIBLE
         }
 
-        // Store info
         binding.tvStoreName.text = data?.store_name ?: "Không rõ cửa hàng"
         binding.tvAddress.text = data?.address ?: ""
         binding.tvPhone.text = data?.phone ?: ""
         binding.tvAddress.visibility = if (data?.address.isNullOrBlank()) View.GONE else View.VISIBLE
         binding.tvPhone.visibility = if (data?.phone.isNullOrBlank()) View.GONE else View.VISIBLE
 
-        // Date & Invoice ID
         binding.tvDatetime.text = formatDate(data?.datetime ?: "")
         binding.tvInvoiceId.text = data?.invoice_id ?: "—"
 
-        // Items
         itemsAdapter.submitList(bill.items ?: emptyList())
 
-        // Totals
         binding.tvTotal.text = formatCurrency(data?.total ?: 0)
         binding.tvCashGiven.text = data?.cash_given?.let { formatCurrency(it) } ?: "—"
         binding.tvCashChange.text = data?.cash_change?.let { formatCurrency(it) } ?: "—"
         binding.tvPayment.text = data?.payment_method ?: "—"
 
-        // Delete button
         binding.btnDelete.setOnClickListener {
             confirmDelete(bill.bill_id)
         }
@@ -130,6 +117,6 @@ class BillDetailActivity : AppCompatActivity() {
     }
 
     private fun formatCurrency(amount: Long): String {
-        return NumberFormat.getNumberInstance(Locale("vi", "VN")).format(amount) + "đ"
+        return NumberFormat.getNumberInstance(Locale.forLanguageTag("vi-VN")).format(amount) + "đ"
     }
 }

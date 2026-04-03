@@ -11,7 +11,8 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="20dp">
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="32dp">
 
         <!-- Header -->
         <TextView
@@ -19,38 +20,41 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Tài khoản"
-            android:paddingTop="4dp"
-            android:paddingBottom="20dp"/>
+            android:textSize="28sp"
+            android:paddingBottom="24dp"/>
 
         <!-- User Info Card -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            app:cardCornerRadius="16dp"
-            app:cardElevation="2dp"
+            app:cardCornerRadius="4dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="@color/border_card"
             app:cardBackgroundColor="@color/bg_card">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="20dp">
+                android:padding="24dp">
 
                 <TextView
                     style="@style/PolarisAppSubText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="ĐĂNG NHẬP VỚI"
-                    android:textSize="11sp"
-                    android:letterSpacing="0.1"/>
+                    android:textSize="12sp"
+                    android:letterSpacing="0.05"
+                    android:textStyle="bold"/>
 
                 <TextView
                     android:id="@+id/tvUserEmail"
                     style="@style/PolarisAppTitle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:textSize="16sp"
-                    android:layout_marginTop="4dp"
+                    android:textSize="18sp"
+                    android:layout_marginTop="8dp"
                     android:text="user@gmail.com"/>
 
             </LinearLayout>
@@ -60,16 +64,19 @@
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            app:cardCornerRadius="16dp"
-            app:cardElevation="2dp"
+            android:layout_marginTop="16dp"
+            app:cardCornerRadius="4dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="@color/border_card"
             app:cardBackgroundColor="@color/bg_card">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:padding="20dp">
+                android:paddingVertical="24dp"
+                android:paddingHorizontal="16dp">
 
                 <LinearLayout
                     android:layout_width="0dp"
@@ -83,11 +90,13 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="0"
-                        android:textSize="28sp"/>
+                        android:textColor="@color/accent_indigo"
+                        android:textSize="32sp"/>
                     <TextView
                         style="@style/PolarisAppSubText"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
                         android:text="Tổng hóa đơn"/>
                 </LinearLayout>
 
@@ -108,12 +117,13 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="0đ"
-                        android:textSize="20sp"/>
+                        android:textSize="22sp"/>
                     <TextView
                         style="@style/PolarisAppSubText"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Tổng chi tiêu"/>
+                        android:layout_marginTop="4dp"
+                        android:text="Đã chi tiêu"/>
                 </LinearLayout>
 
             </LinearLayout>
@@ -122,20 +132,25 @@
         <!-- Logout Button -->
         <androidx.appcompat.widget.AppCompatButton
             android:id="@+id/btnLogout"
-            style="@style/PolarisButton"
             android:layout_width="match_parent"
             android:layout_height="52dp"
-            android:layout_marginTop="24dp"
-            android:text="Đăng xuất"/>
+            android:layout_marginTop="32dp"
+            android:background="@drawable/bg_outline_button"
+            android:textColor="@color/error_red"
+            android:textStyle="bold"
+            android:textAllCaps="false"
+            android:textSize="15sp"
+            android:text="Đăng xuất khỏi thiết bị"/>
 
         <!-- App version -->
         <TextView
             style="@style/PolarisAppSubText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Bill AI v1.0"
+            android:text="Bill AI v1.0 • SaaS Edition"
             android:gravity="center"
-            android:layout_marginTop="24dp"/>
+            android:layout_marginTop="48dp"
+            android:textSize="12sp"/>
 
     </LinearLayout>
 </ScrollView>

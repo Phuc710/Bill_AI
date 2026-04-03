@@ -43,7 +43,7 @@ class GeminiExtractor:
             return self._empty("[no api key]", raw_text=raw_text)
 
         self._ensure_client()
-        prompt = f"{self._prompt}\n\nOCR_TEXT:\n{raw_text}\n\nJSON:"
+        prompt = f"OCR_TEXT:\n{raw_text}"
         raw_response = self._call(prompt)
         structured = _parse_response(raw_response, raw_text=raw_text)
         return {
@@ -62,11 +62,13 @@ class GeminiExtractor:
         genai.configure(api_key=Config.GEMINI_API_KEY)
         self._client = genai.GenerativeModel(
             model_name=Config.GEMINI_MODEL,
+            system_instruction=self._prompt,
             generation_config={
                 "temperature": 0.0,
                 "top_p": 0.8,
                 "candidate_count": 1,
-                "max_output_tokens": 1200,
+                "max_output_tokens": 1024,
+                "response_mime_type": "application/json",
             },
         )
 

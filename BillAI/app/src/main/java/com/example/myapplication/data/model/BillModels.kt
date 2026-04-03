@@ -16,20 +16,20 @@ data class BillResponse(
 
 data class BillData(
     val store_name: String?,
-    val address: String?,
-    val phone: String?,
-    val invoice_id: String?,
-    val datetime: String?,
-    val total: Long,
+    @SerializedName("store_address") val address: String?,
+    @SerializedName("store_phone") val phone: String?,
+    @SerializedName("invoice_number") val invoice_id: String?,
+    @SerializedName("issued_at") val datetime: String?,
+    @SerializedName("total_amount") val total: Long,
     val subtotal: Long?,
-    val cash_given: Long?,
+    @SerializedName("cash_tendered") val cash_given: Long?,
     val cash_change: Long?,
     val payment_method: String?,
     val currency: String?
 )
 
 data class BillItem(
-    val name: String,
+    @SerializedName("item_name") val name: String,
     val quantity: Int,
     val unit_price: Long,
     val total_price: Long
@@ -52,12 +52,16 @@ data class BillSummary(
     val id: String,
     val user_id: String,
     val status: String,
+    val failed_step: String?,
     val store_name: String?,
-    val total: Long?,
+    val invoice_number: String?,
+    val issued_at: String?,
+    @SerializedName("total_amount") val total: Long?,
     val currency: String?,
     val payment_method: String?,
     val cropped_image_url: String?,
     val needs_review: Boolean,
+    val processing_time_ms: Double?,
     val created_at: String,
-    val failed_step: String?
+    val item_count: Int?
 )

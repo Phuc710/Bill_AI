@@ -1,120 +1,157 @@
 -- ============================================================
--- Bill AI — Supabase Database Schema (Final)
--- Project: BILLAI | wnzwympdwnnvdzhsxcin.supabase.co
+-- Bill AI — Supabase Database Schema (Production v2)
+-- Dự án: Trích Xuất Hóa Đơn Thông Minh (Invoice Extraction)
+-- Database: PostgreSQL (Supabase)
+-- Project: wnzwympdwnnvdzhsxcin.supabase.co
 -- ============================================================
 
--- DỌN DẸP / CHẠY LẠI MỚI TOÀN BỘ (RESET ALL)
-DROP VIEW IF EXISTS v_bills_summary CASCADE;
-DROP TABLE IF EXISTS bill_items CASCADE;
-DROP TABLE IF EXISTS bills CASCADE;
-DROP FUNCTION IF EXISTS update_updated_at CASCADE;
+-- ============================================================
+-- RESET: Dọn dẹp toàn bộ trước khi tạo mới
+-- Chạy section này nếu bạn muốn reset sạch CSDL
+-- ============================================================
+DROP VIEW  IF EXISTS v_invoice_summary   CASCADE;
+DROP TABLE IF EXISTS invoice_items       CASCADE;
+DROP TABLE IF EXISTS invoices            CASCADE;
+DROP FUNCTION IF EXISTS fn_set_updated_at CASCADE;
 
--- Enable UUID generation
+-- Kích hoạt extension tạo UUID
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
+
 -- ============================================================
--- TABLE: bills
--- Lưu metadata + kết quả xử lý cho từng hóa đơn
+-- TABLE: invoices
+-- Mục đích: Lưu toàn bộ thông tin của 1 hóa đơn đã được xử lý.
+--
+-- Luồng xử lý (Pipeline Status):
+--   uploaded → detecting → cropping → ocr_done → normalizing → completed
+--                                                             → failed
 -- ============================================================
-CREATE TABLE IF NOT EXISTS bills (
-    -- Identity
-    id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id             TEXT        NOT NULL DEFAULT '',
+CREATE TABLE IF NOT EXISTS invoices (
 
-    -- Pipeline status
-    status              TEXT        NOT NULL DEFAULT 'uploaded'
-                        CHECK (status IN (
-                            'uploaded',     -- Đã nhận ảnh, chưa xử lý
-                            'detecting',    -- Đang detect vùng bill (YOLO)
-                            'cropping',     -- Đang crop & lưu Storage
-                            'ocr_done',     -- OCR hoàn tất
-                            'normalizing',  -- Gemini đang chuẩn hóa
-                            'completed',    -- Thành công toàn bộ
-                            'failed'        -- Lỗi ở bước nào đó
-                        )),
-    failed_step         TEXT        DEFAULT NULL,   -- detect | ocr | gemini | null
-    error_message       TEXT        DEFAULT NULL,
+    -- ── Định danh ─────────────────────────────────────────────
+    id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID        NOT NULL,   -- Khóa ngoại khớp với auth.users(id)
 
-    -- Supabase Storage URLs
-    original_image_url  TEXT        DEFAULT NULL,   -- Bills/Original/YYYY/MM/DD/{id}.jpg
-    cropped_image_url   TEXT        DEFAULT NULL,   -- Bills/Cropped/YYYY/MM/DD/{id}_crop.jpg
+    -- ── Trạng thái pipeline ───────────────────────────────────
+    -- Theo dõi hóa đơn đang ở bước nào trong quy trình xử lý AI
+    status          TEXT        NOT NULL DEFAULT 'uploaded'
+                    CHECK (status IN (
+                        'uploaded',     -- Đã nhận ảnh, chưa xử lý
+                        'detecting',    -- YOLO đang phát hiện vùng hóa đơn
+                        'cropping',     -- Đang cắt & lưu ảnh lên Storage
+                        'ocr_done',     -- VnCV OCR đã đọc xong văn bản
+                        'normalizing',  -- Gemini AI đang phân tích và chuẩn hóa
+                        'completed',    -- Hoàn tất toàn bộ pipeline
+                        'failed'        -- Thất bại tại một bước nào đó
+                    )),
+    failed_step     TEXT        DEFAULT NULL
+                    CHECK (failed_step IN ('detect', 'ocr', 'gemini', 'db_init', 'unknown', NULL)),
+    error_message   TEXT        DEFAULT NULL,   -- Mô tả lỗi chi tiết (nếu failed)
 
-    -- Raw data
-    ocr_raw_text        TEXT        DEFAULT '',     -- Text thô từ VnCV OCR
-    gemini_raw_response TEXT        DEFAULT NULL,   -- Response JSON gốc từ Gemini
+    -- ── Ảnh lưu trên Supabase Storage ────────────────────────
+    -- URL công khai (public URL) của ảnh trong bucket "Bills"
+    original_image_url  TEXT    DEFAULT NULL,   -- Bills/Original/YYYY/MM/DD/{id}.jpg
+    cropped_image_url   TEXT    DEFAULT NULL,   -- Bills/Cropped/YYYY/MM/DD/{id}_crop.jpg
 
-    -- Extracted invoice fields
-    store_name          TEXT        DEFAULT NULL,
-    address             TEXT        DEFAULT NULL,
-    phone               TEXT        DEFAULT NULL,
-    invoice_code        TEXT        DEFAULT NULL,   -- Số HĐ
-    datetime_in         TIMESTAMPTZ DEFAULT NULL,   -- Giờ vào / ngày in
-    datetime_out        TIMESTAMPTZ DEFAULT NULL,   -- Giờ ra (nếu có)
-    cashier             TEXT        DEFAULT NULL,   -- Thu ngân
-    table_num           TEXT        DEFAULT NULL,   -- Số bàn
-    payment_method      TEXT        DEFAULT NULL,   -- CASH | CARD | ...
-    currency            TEXT        NOT NULL DEFAULT 'VND',
+    -- ── Dữ liệu thô từ pipeline ──────────────────────────────
+    ocr_raw_text        TEXT    DEFAULT '',     -- Văn bản thô đọc từ VnCV OCR
+    gemini_raw_response TEXT    DEFAULT NULL,   -- Response JSON gốc từ Gemini AI
 
-    -- Money fields (VND, lưu integer để tránh float error)
-    subtotal            BIGINT      DEFAULT NULL,
-    total               BIGINT      NOT NULL DEFAULT 0,
-    cash_given          BIGINT      DEFAULT NULL,
-    cash_change         BIGINT      DEFAULT NULL,
+    -- ── Thông tin cửa hàng / nhà cung cấp ────────────────────
+    store_name      TEXT        DEFAULT NULL,   -- Tên cửa hàng / nhà hàng
+    store_address   TEXT        DEFAULT NULL,   -- Địa chỉ cửa hàng
+    store_phone     TEXT        DEFAULT NULL,   -- Số điện thoại cửa hàng
 
-    -- Quality metrics
-    detect_confidence   FLOAT       DEFAULT 0,
-    ocr_confidence      FLOAT       DEFAULT 0,
-    processing_ms       FLOAT       DEFAULT 0,
-    needs_review        BOOLEAN     NOT NULL DEFAULT FALSE,
+    -- ── Thông tin hóa đơn ─────────────────────────────────────
+    invoice_number  TEXT        DEFAULT NULL,   -- Số hóa đơn (invoice code)
+    issued_at       TIMESTAMPTZ DEFAULT NULL,   -- Ngày/giờ xuất hóa đơn (giờ vào)
+    closed_at       TIMESTAMPTZ DEFAULT NULL,   -- Giờ ra (nếu là nhà hàng)
+    cashier_name    TEXT        DEFAULT NULL,   -- Tên thu ngân
+    table_number    TEXT        DEFAULT NULL,   -- Số bàn (áp dụng cho nhà hàng)
+    currency        TEXT        NOT NULL DEFAULT 'VND',
 
-    -- Timestamps
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+    -- ── Các khoản tiền (lưu BIGINT tránh lỗi float với VND) ──
+    subtotal        BIGINT      DEFAULT NULL,   -- Tạm tính (trước giảm giá/thuế)
+    discount_amount BIGINT      DEFAULT NULL,   -- Số tiền giảm giá (nếu có)
+    total_amount    BIGINT      NOT NULL DEFAULT 0, -- TỔNG CỘNG phải trả
+    cash_tendered   BIGINT      DEFAULT NULL,   -- Tiền khách đưa
+    cash_change     BIGINT      DEFAULT NULL,   -- Tiền thối lại
+    payment_method  TEXT        DEFAULT NULL,   -- CASH | CARD | TRANSFER
+
+    -- ── Chỉ số chất lượng pipeline ────────────────────────────
+    -- Dùng để đánh giá độ tin cậy của kết quả trích xuất
+    detect_confidence   FLOAT   NOT NULL DEFAULT 0, -- Độ tin cậy phát hiện hóa đơn (0.0–1.0)
+    ocr_confidence      FLOAT   NOT NULL DEFAULT 0, -- Độ tin cậy nhận dạng văn bản (0.0–1.0)
+    processing_time_ms  FLOAT   NOT NULL DEFAULT 0, -- Tổng thời gian xử lý (milliseconds)
+    needs_review        BOOLEAN NOT NULL DEFAULT FALSE, -- TRUE nếu kết quả cần kiểm tra lại bởi người dùng
+
+    -- ── Timestamps ────────────────────────────────────────────
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- ============================================================
--- TABLE: bill_items
--- Danh sách món ăn / sản phẩm trong từng hóa đơn
--- ============================================================
-CREATE TABLE IF NOT EXISTS bill_items (
-    id          UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
-    bill_id     UUID    NOT NULL REFERENCES bills(id) ON DELETE CASCADE,
+COMMENT ON TABLE  invoices IS 'Bảng chính lưu toàn bộ hóa đơn đã được xử lý qua AI pipeline.';
+COMMENT ON COLUMN invoices.user_id          IS 'UUID của người dùng từ Supabase Auth.';
+COMMENT ON COLUMN invoices.status           IS 'Trạng thái hiện tại trong pipeline xử lý.';
+COMMENT ON COLUMN invoices.needs_review     IS 'TRUE khi AI không tự tin về kết quả, cần người dùng kiểm tra.';
+COMMENT ON COLUMN invoices.total_amount     IS 'Tổng số tiền phải trả, lưu dạng số nguyên (VND).';
+COMMENT ON COLUMN invoices.detect_confidence IS 'Điểm tin cậy từ model YOLO (0.0 = không chắc, 1.0 = chắc chắn).';
 
-    name        TEXT    NOT NULL,
-    quantity    INT     NOT NULL DEFAULT 1,
-    unit_price  BIGINT  NOT NULL DEFAULT 0,
-    total_price BIGINT  NOT NULL DEFAULT 0,
 
-    sort_order  INT     DEFAULT 0,  -- Giữ đúng thứ tự xuất hiện trên hóa đơn
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+-- ============================================================
+-- TABLE: invoice_items
+-- Mục đích: Lưu danh sách từng mặt hàng / món ăn trong hóa đơn.
+-- Quan hệ: Nhiều items thuộc về 1 invoice (Many-to-One).
+-- ============================================================
+CREATE TABLE IF NOT EXISTS invoice_items (
+
+    id              UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
+    invoice_id      UUID    NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+
+    item_name       TEXT    NOT NULL,               -- Tên mặt hàng / món ăn
+    quantity        INT     NOT NULL DEFAULT 1 CHECK (quantity > 0),
+    unit_price      BIGINT  NOT NULL DEFAULT 0 CHECK (unit_price >= 0),  -- Đơn giá
+    total_price     BIGINT  NOT NULL DEFAULT 0 CHECK (total_price >= 0), -- Thành tiền
+
+    sort_order      SMALLINT NOT NULL DEFAULT 0,    -- Thứ tự xuất hiện trên hóa đơn gốc
+
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- ============================================================
--- INDEXES — Tối ưu các query phổ biến
--- ============================================================
+COMMENT ON TABLE  invoice_items IS 'Danh sách mặt hàng / sản phẩm được trích xuất từ hóa đơn.';
+COMMENT ON COLUMN invoice_items.invoice_id   IS 'Khóa ngoại tới bảng invoices. Xóa invoice sẽ xóa luôn items.';
+COMMENT ON COLUMN invoice_items.sort_order   IS 'Giữ đúng thứ tự các mặt hàng như trên hóa đơn gốc.';
+COMMENT ON COLUMN invoice_items.unit_price   IS 'Đơn giá của 1 đơn vị sản phẩm (VND, số nguyên).';
+COMMENT ON COLUMN invoice_items.total_price  IS 'Thành tiền = quantity × unit_price (VND, số nguyên).';
 
--- Lấy danh sách bill của 1 user, sort by mới nhất
-CREATE INDEX IF NOT EXISTS idx_bills_user_created
-    ON bills (user_id, created_at DESC);
-
--- Filter theo status (e.g. completed only)
-CREATE INDEX IF NOT EXISTS idx_bills_status
-    ON bills (status);
-
--- Filter theo khoảng thời gian (export CSV)
-CREATE INDEX IF NOT EXISTS idx_bills_created_at
-    ON bills (created_at DESC);
-
--- JOIN bill_items theo bill_id
-CREATE INDEX IF NOT EXISTS idx_bill_items_bill_id
-    ON bill_items (bill_id, sort_order ASC);
 
 -- ============================================================
--- FUNCTION: auto-update updated_at on bills
+-- INDEXES — Tối ưu hiệu năng cho các truy vấn phổ biến
 -- ============================================================
-CREATE OR REPLACE FUNCTION update_updated_at()
+
+-- [Query] Lấy danh sách hóa đơn của 1 user, sort theo mới nhất → App Android History screen
+CREATE INDEX IF NOT EXISTS idx_invoices_user_created
+    ON invoices (user_id, created_at DESC);
+
+-- [Query] Lọc hóa đơn theo trạng thái (ví dụ: chỉ lấy 'completed')
+CREATE INDEX IF NOT EXISTS idx_invoices_status
+    ON invoices (status) WHERE status != 'completed';
+
+-- [Query] Thống kê chi tiêu theo khoảng thời gian (Export CSV)
+CREATE INDEX IF NOT EXISTS idx_invoices_issued_at
+    ON invoices (user_id, issued_at DESC) WHERE issued_at IS NOT NULL;
+
+-- [Query] JOIN invoice_items theo invoice + giữ đúng thứ tự
+CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice_id
+    ON invoice_items (invoice_id, sort_order ASC);
+
+
+-- ============================================================
+-- FUNCTION + TRIGGER: Tự động cập nhật cột updated_at
+-- ============================================================
+CREATE OR REPLACE FUNCTION fn_set_updated_at()
 RETURNS TRIGGER
-SET search_path = ''
+SET search_path = ''   -- Bảo mật: tránh tấn công qua search_path injection
 AS $$
 BEGIN
     NEW.updated_at = now();
@@ -122,58 +159,69 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_bills_updated_at
-    BEFORE UPDATE ON bills
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_invoices_set_updated_at
+    BEFORE UPDATE ON invoices
+    FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+
 
 -- ============================================================
 -- ROW LEVEL SECURITY (RLS)
--- Mỗi user chỉ đọc/xóa được bill của mình
--- Backend dùng service_role key => bypass RLS hoàn toàn
+-- Nguyên tắc:
+--   - User thường (anon key): Chỉ đọc và xóa dữ liệu của CHÍNH MÌNH.
+--   - Backend (service_role key): Bypass RLS hoàn toàn → Ghi/cập nhật thoải mái.
 -- ============================================================
-ALTER TABLE bills      ENABLE ROW LEVEL SECURITY;
-ALTER TABLE bill_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE invoices        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE invoice_items   ENABLE ROW LEVEL SECURITY;
 
--- Chỉ đọc được bill của chính mình (dùng anon/user key)
-CREATE POLICY "users_read_own_bills"
-    ON bills FOR SELECT
-    USING (user_id = auth.uid()::text);
+-- [Policy] User chỉ đọc được hóa đơn của chính mình (App Android dùng anon key)
+CREATE POLICY "policy_user_select_own_invoices"
+    ON invoices FOR SELECT
+    USING (user_id = auth.uid());
 
--- Chỉ xóa được bill của chính mình
-CREATE POLICY "users_delete_own_bills"
-    ON bills FOR DELETE
-    USING (user_id = auth.uid()::text);
+-- [Policy] User chỉ xóa được hóa đơn của chính mình
+CREATE POLICY "policy_user_delete_own_invoices"
+    ON invoices FOR DELETE
+    USING (user_id = auth.uid());
 
--- bill_items: đọc theo bill_id thuộc về mình
-CREATE POLICY "users_read_own_bill_items"
-    ON bill_items FOR SELECT
+-- [Policy] User chỉ đọc được items của hóa đơn thuộc về mình
+CREATE POLICY "policy_user_select_own_invoice_items"
+    ON invoice_items FOR SELECT
     USING (
         EXISTS (
-            SELECT 1 FROM bills
-            WHERE bills.id = bill_items.bill_id
-              AND bills.user_id = auth.uid()::text
+            SELECT 1
+            FROM   invoices
+            WHERE  invoices.id      = invoice_items.invoice_id
+              AND  invoices.user_id = auth.uid()
         )
     );
 
+
 -- ============================================================
--- VIEW: v_bills_summary
--- Dùng cho màn lịch sử bill (GET /bills)
+-- VIEW: v_invoice_summary
+-- Mục đích: Cung cấp dữ liệu tóm tắt cho màn Lịch Sử (History Screen)
+--           trên App Android. Bao gồm số lượng món trong mỗi hóa đơn.
+-- Bảo mật: security_invoker = true → View tuân thủ đúng RLS của bảng gốc.
 -- ============================================================
-CREATE OR REPLACE VIEW v_bills_summary WITH (security_invoker = true) AS
+CREATE OR REPLACE VIEW v_invoice_summary
+WITH (security_invoker = true) AS
 SELECT
-    b.id,
-    b.user_id,
-    b.status,
-    b.failed_step,
-    b.store_name,
-    b.datetime_in,
-    b.total,
-    b.currency,
-    b.payment_method,
-    b.cropped_image_url,
-    b.needs_review,
-    b.created_at,
-    COUNT(i.id) AS item_count
-FROM bills b
-LEFT JOIN bill_items i ON i.bill_id = b.id
-GROUP BY b.id;
+    inv.id,
+    inv.user_id,
+    inv.status,
+    inv.failed_step,
+    inv.store_name,
+    inv.invoice_number,
+    inv.issued_at,
+    inv.total_amount,
+    inv.currency,
+    inv.payment_method,
+    inv.cropped_image_url,
+    inv.needs_review,
+    inv.processing_time_ms,
+    inv.created_at,
+    COUNT(itm.id)::INT AS item_count   -- Số lượng mặt hàng trong hóa đơn
+FROM       invoices     inv
+LEFT JOIN  invoice_items itm ON itm.invoice_id = inv.id
+GROUP BY   inv.id;
+
+COMMENT ON VIEW v_invoice_summary IS 'View tóm tắt hóa đơn dùng cho màn Lịch Sử trên App Android. Trả về thông tin cơ bản + số lượng món.';
