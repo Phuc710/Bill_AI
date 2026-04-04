@@ -1,7 +1,7 @@
 """
 Invoice Pipeline — Production Flow.
 
-  Upload → Detect (YOLO) → Crop → OCR (VnCV) → Gemini AI → Save to Supabase
+  Upload → Detect (YOLO) → Crop → OCR (VnCV) → Groq Llama 3.3 70B → Save to Supabase
 
 DB status transitions:
   uploaded → detecting → cropping → ocr_done → normalizing → completed
@@ -22,7 +22,7 @@ from PIL import Image, ImageOps
 from core.config import Config
 from core.database import DatabaseService
 from core.detector import BillDetector, DetectionRegion, NoBillError
-from core.gemini_extractor import GeminiExtractor
+from core.groq_extractor import GroqExtractor
 from core.ocr import OCREngine, OCRTextResult
 from core.standardizer import ImageStandardizer
 from core.storage import StorageService
@@ -35,7 +35,7 @@ class InvoicePipeline:
         self._detector     = BillDetector()
         self._standardizer = ImageStandardizer()
         self._ocr          = OCREngine()
-        self._gemini       = GeminiExtractor()
+        self._extractor    = GroqExtractor()
 
     # ── Main entry ────────────────────────────────────────────────────────
 
@@ -68,22 +68,23 @@ class InvoicePipeline:
             orig_url = StorageService.upload_image(image, bill_id, "Original")
             log.info(f"[{bill_id}] Original uploaded: {orig_url}")
 
-            # ── Step 3: Detect ─────────────────────────────────────────────
+            # ── Step 3: Detect & Crop ──────────────────────────────────────
             region = self._detect(image)
             if region is None:
-                DatabaseService.mark_failed(bill_id, "detect", "Không phát hiện Bill trong ảnh")
-                log.warning(f"[{bill_id}] Detection failed")
-                return self._not_found_response(bill_id, orig_url, t0)
+                log.warning(f"[{bill_id}] Detection failed — Fallback to FULL IMAGE OCR")
+                cropped = image
+                crop_url = orig_url
+                detect_conf = 0.0
+                DatabaseService.update_status(bill_id, "ocr_done")
+            else:
+                log.info(f"[{bill_id}] Detected conf={region.confidence:.3f} bbox={region.bbox}")
+                DatabaseService.update_status(bill_id, "cropping")
+                cropped = self._standardizer.standardize(image, region.bbox)
+                crop_url = StorageService.upload_image(cropped, bill_id, "Cropped")
+                log.info(f"[{bill_id}] Cropped uploaded: {crop_url}")
+                detect_conf = region.confidence
 
-            log.info(f"[{bill_id}] Detected conf={region.confidence:.3f} bbox={region.bbox}")
-
-            # ── Step 4: Crop + upload to Storage ───────────────────────────
-            DatabaseService.update_status(bill_id, "cropping")
-            cropped = self._standardizer.standardize(image, region.bbox)
-            crop_url = StorageService.upload_image(cropped, bill_id, "Cropped")
-            log.info(f"[{bill_id}] Cropped uploaded: {crop_url}")
-
-            # ── Step 5: OCR ────────────────────────────────────────────────
+            # ── Step 5: OCR (VnCV) ─────────────────────────────────────────
             ocr = self._ocr.extract_text(cropped)
             DatabaseService.update_status(
                 bill_id, "ocr_done",
@@ -97,16 +98,16 @@ class InvoicePipeline:
             # ── Smart Exit: OCR empty ──────────────────────────────────────
             if not (ocr.text_raw or "").strip():
                 DatabaseService.mark_failed(bill_id, "ocr", "OCR không đọc được văn bản")
-                log.warning(f"[{bill_id}] OCR empty — skipping Gemini")
-                return self._ocr_empty_response(bill_id, orig_url, crop_url, region, t0)
+                log.warning(f"[{bill_id}] OCR empty — skipping Groq")
+                return self._ocr_empty_response(bill_id, orig_url, crop_url, detect_conf, t0)
 
-            # ── Step 6: Gemini ─────────────────────────────────────────────
+            # ── Step 6: Groq Llama 3.3 70B ─────────────────────────────────────
             DatabaseService.update_status(bill_id, "normalizing")
-            extraction = self._gemini.extract(ocr_text=ocr.text_raw)
+            extraction = self._extractor.extract(ocr_text=ocr.text_raw)
             raw_response = extraction.get("raw_response", "")
             error_type = extraction.get("error_type")
             log.info(
-                f"[{bill_id}] Gemini done | error_type={error_type} | "
+                f"[{bill_id}] Groq done | error_type={error_type} | "
                 f"raw_len={len(raw_response)}"
             )
 
@@ -114,17 +115,17 @@ class InvoicePipeline:
             structured = extraction.get("structured") or {}
             items: List[Dict[str, Any]] = structured.get("items") or []
             processing_ms = (time.perf_counter() - t0) * 1000
-            needs_review = self._needs_review(structured, region.confidence, ocr.confidence_avg, error_type)
+            needs_review = self._needs_review(structured, detect_conf, ocr.confidence_avg, error_type)
 
             DatabaseService.save_result(
                 invoice_id=bill_id,
                 structured=structured,
                 items=items,
                 ocr_raw_text=ocr.text_raw or "",
-                gemini_raw=raw_response,
+                llm_raw=raw_response,
                 orig_url=orig_url,
                 crop_url=crop_url,
-                detect_confidence=region.confidence,
+                detect_confidence=detect_conf,
                 ocr_confidence=ocr.confidence_avg,
                 processing_ms=processing_ms,
                 needs_review=needs_review,
@@ -140,10 +141,10 @@ class InvoicePipeline:
                 items=items,
                 orig_url=orig_url,
                 crop_url=crop_url,
-                detect_confidence=region.confidence,
+                detect_confidence=detect_conf,
                 processing_ms=processing_ms,
                 needs_review=needs_review,
-                gemini_error=error_type,
+                llm_error=error_type,
             )
 
         except Exception as exc:
@@ -175,9 +176,9 @@ class InvoicePipeline:
         structured: Dict[str, Any],
         detect_conf: float,
         ocr_conf: float,
-        gemini_error: Optional[str],
+        llm_error: Optional[str],
     ) -> bool:
-        if gemini_error:
+        if llm_error:
             return True
         if detect_conf < Config.DETECTOR_CONF_THRESHOLD:
             return True
@@ -199,7 +200,7 @@ class InvoicePipeline:
         detect_confidence: float,
         processing_ms: float,
         needs_review: bool,
-        gemini_error: Optional[str],
+        llm_error: Optional[str],
     ) -> Dict[str, Any]:
         return {
             "bill_id": bill_id,
@@ -225,7 +226,7 @@ class InvoicePipeline:
                 "needs_review":       needs_review,
                 "detect_confidence":  round(detect_confidence, 4),
                 "processing_ms":      round(processing_ms, 1),
-                "gemini_error":       gemini_error,
+                "llm_error":          llm_error,
             },
         }
 
@@ -250,7 +251,7 @@ class InvoicePipeline:
         bill_id: str,
         orig_url: Optional[str],
         crop_url: Optional[str],
-        region: DetectionRegion,
+        detect_conf: float,
         t0: float,
     ) -> Dict[str, Any]:
         return {
@@ -263,7 +264,7 @@ class InvoicePipeline:
             "data": None,
             "items": [],
             "meta": {
-                "detect_confidence": round(region.confidence, 4),
+                "detect_confidence": round(detect_conf, 4),
                 "processing_ms": round((time.perf_counter() - t0) * 1000, 1),
             },
         }

@@ -42,7 +42,7 @@ def _safe_json_loads(raw: Optional[str]) -> Dict[str, Any]:
     "/process",
     response_model=PipelineResponse,
     summary="Xử lý 1 hóa đơn",
-    description="Upload 1 ảnh hóa đơn, hệ thống sẽ chạy qua pipeline Detection -> Standardize -> OCR -> Gemini.",
+    description="Upload 1 ảnh hóa đơn, hệ thống sẽ chạy qua pipeline Detection -> Standardize -> OCR -> Groq Llama.",
 )
 async def process_invoice(
     file: UploadFile = File(...),

@@ -1,11 +1,16 @@
 """
-Gemini extractor — structured invoice output from raw OCR text.
+Groq LLM Extractor — Dùng Llama 3.3-70B qua Groq API.
 
-Error types returned in raw_response:
-  [empty ocr]       — no text was given, skipped
-  [no api key]      — GEMINI_API_KEY not configured
-  [quota exceeded]  — 429, free-tier rate limit hit
-  [gemini error]    — any other API error
+Ưu điểm:
+  - Nhanh (Sử dụng Groq LPU inference chip)
+  - Stable JSON mode: response_format={"type": "json_object"}
+  - High Rate Limit: 6000 requests/ngày
+
+Error types returned:
+  [empty ocr]    — không có text đầu vào
+  [no api key]   — GROQ_API_KEY chưa cấu hình
+  [groq error]   — lỗi API
+  [quota limit]  — rate limit hit
 """
 from __future__ import annotations
 
@@ -16,22 +21,40 @@ from typing import Any, Dict, List, Optional
 from core.config import Config
 
 
-def _load_prompt() -> str:
-    p = Config.EXTRACTION_PROMPT
-    if p.exists():
-        return p.read_text(encoding="utf-8").strip()
-    return (
-        "Extract invoice fields from OCR text and return STRICT JSON only with keys: "
-        "store_name,address,phone,invoice_id,datetime_in,datetime_out,cashier,table,"
-        "items,subtotal,total,cash_given,cash_change,payment_method,raw_text"
-    )
+_SYSTEM_PROMPT = """Bạn là chuyên gia kế toán Việt Nam.
+Nhiệm vụ: Trích xuất thông tin từ văn bản OCR hóa đơn/biên lai và trả về STRICT JSON.
+
+Schema BẮT BUỘC (không thêm key khác):
+{
+  "store_name": "Tên cửa hàng hoặc null",
+  "address": "Địa chỉ hoặc null",
+  "phone": "Số điện thoại hoặc null",
+  "invoice_id": "Mã hóa đơn hoặc null",
+  "datetime_in": "DD/MM/YYYY HH:MM hoặc DD/MM/YYYY hoặc null",
+  "datetime_out": "DD/MM/YYYY HH:MM hoặc null",
+  "cashier": "Tên thu ngân hoặc null",
+  "table": "Số bàn hoặc null",
+  "items": [
+    {"name": "Tên món", "quantity": 1, "unit_price": 0, "total_price": 0}
+  ],
+  "subtotal": 0,
+  "total": 0,
+  "cash_given": 0,
+  "cash_change": 0,
+  "category": "Food & Beverage | Grocery | Transport | Entertainment | Healthcare | Shopping | Other"
+}
+
+Quy tắc:
+- Tự sửa lỗi OCR (chính tả, dấu tiếng Việt sai)
+- Số tiền luôn là Integer (VND, bỏ dấu phẩy/chấm)
+- Nếu không tìm thấy giá trị → null (số nguyên → 0)
+- CHỈ trả về JSON, KHÔNG có markdown, KHÔNG có giải thích"""
 
 
-class GeminiExtractor:
+class GroqExtractor:
     MAX_RETRIES = 2
 
     def __init__(self) -> None:
-        self._prompt = _load_prompt()
         self._client = None
 
     def extract(self, ocr_text: str) -> Dict[str, Any]:
@@ -39,12 +62,11 @@ class GeminiExtractor:
         if not raw_text:
             return self._empty("[empty ocr]", raw_text="")
 
-        if not Config.GEMINI_API_KEY:
+        if not Config.GROQ_API_KEY:
             return self._empty("[no api key]", raw_text=raw_text)
 
         self._ensure_client()
-        prompt = f"OCR_TEXT:\n{raw_text}"
-        raw_response = self._call(prompt)
+        raw_response = self._call(raw_text)
         structured = _parse_response(raw_response, raw_text=raw_text)
         return {
             "legacy": _to_legacy(structured),
@@ -58,37 +80,34 @@ class GeminiExtractor:
     def _ensure_client(self) -> None:
         if self._client is not None:
             return
-        import google.generativeai as genai
-        genai.configure(api_key=Config.GEMINI_API_KEY)
-        self._client = genai.GenerativeModel(
-            model_name=Config.GEMINI_MODEL,
-            system_instruction=self._prompt,
-            generation_config={
-                "temperature": 0.0,
-                "top_p": 0.8,
-                "candidate_count": 1,
-                "max_output_tokens": 1024,
-                "response_mime_type": "application/json",
-            },
-        )
+        from groq import Groq
+        self._client = Groq(api_key=Config.GROQ_API_KEY)
 
-    def _call(self, prompt: str) -> str:
+    def _call(self, ocr_text: str) -> str:
         last_error = ""
         for attempt in range(self.MAX_RETRIES + 1):
             try:
-                response = self._client.generate_content(prompt)
-                text = _read_text(response)
-                if text:
-                    return text
-                last_error = "[gemini empty]"
+                resp = self._client.chat.completions.create(
+                    model=Config.GROQ_MODEL,
+                    messages=[
+                        {"role": "system", "content": _SYSTEM_PROMPT},
+                        {"role": "user", "content": f"Văn bản OCR hóa đơn:\n{ocr_text}"},
+                    ],
+                    response_format={"type": "json_object"},
+                    temperature=0.0,
+                    max_tokens=1024,
+                )
+                text = resp.choices[0].message.content or ""
+                if text.strip():
+                    return text.strip()
+                last_error = "[groq empty]"
             except Exception as exc:
                 msg = str(exc).lower()
-                if any(t in msg for t in ("quota", "429", "rate")):
-                    # Quota hit — no point retrying immediately
-                    return f"[quota exceeded] {exc}"
-                last_error = f"[gemini error] {exc}"
+                if any(t in msg for t in ("quota", "429", "rate", "limit")):
+                    return f"[quota limit] {exc}"
+                last_error = f"[groq error] {exc}"
                 if attempt < self.MAX_RETRIES:
-                    time.sleep(Config.GEMINI_RETRY_DELAY)
+                    time.sleep(1.0)
                     continue
                 break
         return last_error
@@ -106,7 +125,6 @@ class GeminiExtractor:
 # ── helpers ───────────────────────────────────────────────────────────────────
 
 def _classify_error(raw: str) -> Optional[str]:
-    """Return an error type string if gemini returned an error, else None."""
     if not raw or not raw.startswith("["):
         return None
     if "quota" in raw:
@@ -115,8 +133,8 @@ def _classify_error(raw: str) -> Optional[str]:
         return "empty_ocr"
     if "no api key" in raw:
         return "no_api_key"
-    if "gemini" in raw:
-        return "gemini_error"
+    if "groq" in raw:
+        return "groq_error"
     return "unknown"
 
 
@@ -125,31 +143,12 @@ def _prepare(text: str) -> str:
     if not normalized:
         return ""
     lines = normalized.split("\n")
-    if Config.GEMINI_MAX_INPUT_LINES > 0:
-        lines = lines[: Config.GEMINI_MAX_INPUT_LINES]
+    if Config.GROQ_MAX_INPUT_LINES > 0:
+        lines = lines[: Config.GROQ_MAX_INPUT_LINES]
     clipped = "\n".join(lines)
-    if Config.GEMINI_MAX_INPUT_CHARS > 0 and len(clipped) > Config.GEMINI_MAX_INPUT_CHARS:
-        return clipped[: Config.GEMINI_MAX_INPUT_CHARS].rstrip()
+    if Config.GROQ_MAX_INPUT_CHARS > 0 and len(clipped) > Config.GROQ_MAX_INPUT_CHARS:
+        return clipped[: Config.GROQ_MAX_INPUT_CHARS].rstrip()
     return clipped
-
-
-def _read_text(response: Any) -> str:
-    if response is None:
-        return ""
-    try:
-        text = response.text
-    except Exception:
-        text = ""
-    if text and text.strip():
-        return text.strip()
-    parts: List[str] = []
-    for candidate in getattr(response, "candidates", None) or []:
-        content = getattr(candidate, "content", None)
-        for part in getattr(content, "parts", None) or []:
-            v = getattr(part, "text", None)
-            if v:
-                parts.append(v)
-    return "\n".join(parts).strip()
 
 
 def _parse_response(raw: str, raw_text: str) -> Dict[str, Any]:
@@ -159,21 +158,22 @@ def _parse_response(raw: str, raw_text: str) -> Dict[str, Any]:
 
     items = _parse_items(payload.get("items"))
     return {
-        "store_name":     _str(payload.get("store_name")),
-        "address":        _str(payload.get("address")),
-        "phone":          _str(payload.get("phone")),
-        "invoice_id":     _str(payload.get("invoice_id")),
-        "datetime_in":    _str(payload.get("datetime_in")),
-        "datetime_out":   _str(payload.get("datetime_out")),
-        "cashier":        _str(payload.get("cashier")),
-        "table":          _str(payload.get("table")),
-        "items":          items,
-        "subtotal":       _opt_int(payload.get("subtotal")),
-        "total":          _int(payload.get("total")),
-        "cash_given":     _opt_int(payload.get("cash_given")),
-        "cash_change":    _opt_int(payload.get("cash_change")),
-        "category":       _str(payload.get("category")) or "Khác",
-        "raw_text":       raw_text,
+        "store_name":   _str(payload.get("store_name")),
+        "address":      _str(payload.get("address")),
+        "phone":        _str(payload.get("phone")),
+        "invoice_id":   _str(payload.get("invoice_id")),
+        "datetime_in":  _str(payload.get("datetime_in")),
+        "datetime_out": _str(payload.get("datetime_out")),
+        "cashier":      _str(payload.get("cashier")),
+        "table":        _str(payload.get("table")),
+        "items":        items,
+        "subtotal":     _opt_int(payload.get("subtotal")),
+        "total":        _int(payload.get("total")),
+        "cash_given":   _opt_int(payload.get("cash_given")),
+        "cash_change":  _opt_int(payload.get("cash_change")),
+        "payment_method": _str(payload.get("payment_method")),
+        "category":     _str(payload.get("category")) or "Other",
+        "raw_text":     raw_text,
     }
 
 
@@ -220,7 +220,8 @@ def _empty_structured(raw_text: str = "") -> Dict[str, Any]:
         "invoice_id": None, "datetime_in": None, "datetime_out": None,
         "cashier": None, "table": None, "items": [],
         "subtotal": None, "total": 0, "cash_given": None,
-        "cash_change": None, "category": "Khác", "raw_text": raw_text,
+        "cash_change": None, "payment_method": None,
+        "category": "Other", "raw_text": raw_text,
     }
 
 

@@ -39,7 +39,7 @@ CREATE TABLE invoices (
                     'ocr_done', 'normalizing', 'completed', 'failed'
                 )),
     failed_step TEXT        DEFAULT NULL
-                CHECK (failed_step IN ('detect', 'ocr', 'gemini', 'db_init', 'unknown', NULL)),
+                CHECK (failed_step IN ('detect', 'ocr', 'llm', 'db_init', 'unknown', NULL)),
     error_message TEXT      DEFAULT NULL,
 
     -- ── Ảnh lưu trên Supabase Storage ────────────────────────
@@ -48,7 +48,7 @@ CREATE TABLE invoices (
 
     -- ── Dữ liệu thô từ pipeline ──────────────────────────────
     ocr_raw_text        TEXT DEFAULT '',
-    gemini_raw_response TEXT DEFAULT NULL,
+    llm_raw_response TEXT DEFAULT NULL,
 
     -- ── Thông tin cửa hàng ────────────────────────────────────
     store_name    TEXT DEFAULT NULL,
@@ -70,7 +70,7 @@ CREATE TABLE invoices (
     cash_tendered   BIGINT DEFAULT NULL,
     cash_change     BIGINT DEFAULT NULL,
 
-    -- ── Phân loại chi tiêu (AI tự đoán từ Gemini) ────────────
+    -- ── Phân loại chi tiêu (AI tự đoán từ Groq Llama) ────────────
     category        TEXT NOT NULL DEFAULT 'Khác'
                     CHECK (category IN (
                         'Ăn uống',    -- Nhà hàng, café, trà sữa, quán ăn
@@ -92,7 +92,7 @@ CREATE TABLE invoices (
 );
 
 COMMENT ON TABLE  invoices IS 'Bảng chính lưu toàn bộ hóa đơn đã được xử lý qua AI pipeline.';
-COMMENT ON COLUMN invoices.category   IS 'Danh mục chi tiêu do Gemini AI tự phân loại.';
+COMMENT ON COLUMN invoices.category   IS 'Danh mục chi tiêu do Groq AI tự phân loại.';
 COMMENT ON COLUMN invoices.user_id    IS 'UUID của người dùng từ Supabase Auth.';
 COMMENT ON COLUMN invoices.needs_review IS 'TRUE khi AI không tự tin về kết quả, cần người dùng kiểm tra.';
 

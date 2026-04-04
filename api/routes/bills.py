@@ -167,14 +167,13 @@ async def export_bill_csv(bill_id: str) -> StreamingResponse:
             "unit_price":   item.get("unit_price", ""),
             "total_price":  item.get("total_price", ""),
             "bill_total":   bill.get("total", ""),
-            "payment":      bill.get("payment_method", ""),
         })
     if not rows:
         rows = [{
             "store": bill.get("store_name", ""), "invoice_id": bill.get("invoice_code", ""),
             "date": str(bill.get("datetime_in", "")), "item": "(no items)",
             "quantity": "", "unit_price": "", "total_price": "",
-            "bill_total": bill.get("total", ""), "payment": bill.get("payment_method", ""),
+            "bill_total": bill.get("total", ""),
         }]
 
     return _make_csv(rows, filename=f"bill_{bill_id[:8]}.csv")
@@ -199,7 +198,6 @@ def _format_bill(bill: dict) -> dict:
             "subtotal":       bill.get("subtotal"),
             "cash_given":     bill.get("cash_tendered"),
             "cash_change":    bill.get("cash_change"),
-            "payment_method": bill.get("payment_method"),
             "category":       bill.get("category", "Khác"),
             "currency":       bill.get("currency", "VND"),
         },

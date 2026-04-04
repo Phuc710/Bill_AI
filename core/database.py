@@ -63,7 +63,7 @@ class DatabaseService:
         structured: Dict[str, Any],
         items: List[Dict[str, Any]],
         ocr_raw_text: str,
-        gemini_raw: str,
+        llm_raw: str,
         orig_url: Optional[str],
         crop_url: Optional[str],
         detect_confidence: float,
@@ -77,7 +77,7 @@ class DatabaseService:
             "original_image_url":   orig_url,
             "cropped_image_url":    crop_url,
             "ocr_raw_text":         ocr_raw_text,
-            "gemini_raw_response":  gemini_raw,
+            "llm_raw_response":     llm_raw,
             # Thông tin cửa hàng
             "store_name":           structured.get("store_name"),
             "store_address":        structured.get("address"),
@@ -86,7 +86,6 @@ class DatabaseService:
             "invoice_number":       structured.get("invoice_id"),
             "cashier_name":         structured.get("cashier"),
             "table_number":         structured.get("table"),
-            "payment_method":       structured.get("payment_method"),
             # Danh mục chi tiêu (AI phân loại)
             "category":             structured.get("category", "Khác"),
             # Tiền tệ
@@ -182,7 +181,7 @@ class DatabaseService:
                 cls._db().table("invoices")
                 .select(
                     "id, user_id, status, store_name, total_amount, currency, "
-                    "payment_method, category, cropped_image_url, needs_review, "
+                    "category, cropped_image_url, needs_review, "
                     "created_at, failed_step, issued_at"
                 )
                 .eq("user_id", user_id)
@@ -217,7 +216,7 @@ class DatabaseService:
         try:
             res = (
                 cls._db().table("invoices")
-                .select("id, store_name, total_amount, payment_method, category, status, issued_at, created_at")
+                .select("id, store_name, total_amount, category, status, issued_at, created_at")
                 .eq("user_id", user_id)
                 .gte("created_at", f"{from_date}T00:00:00Z")
                 .lte("created_at", f"{to_date}T23:59:59Z")

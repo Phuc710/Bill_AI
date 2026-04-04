@@ -408,7 +408,7 @@ data class BillMeta(
     val needs_review: Boolean,
     val detect_confidence: Double,
     val processing_ms: Double,
-    val gemini_error: String?,
+    val llm_error: String?,
 )
 ```
 

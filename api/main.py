@@ -1,8 +1,8 @@
 """
 Bill AI — FastAPI application entry point (Production).
 
-Logging format:
-  2026-04-02 14:00:00 | INFO     | billai.access | [abc123] POST /bills/extract | status=200 | 8200ms | ip=1.2.3.4 | user=uid
+Logging format (colored):
+  2026-04-02 14:00:00 | INFO     | billai.access | [abc123] POST /bills/extract | status=200 | 8200ms
 """
 from __future__ import annotations
 
@@ -21,30 +21,82 @@ from core.config import Config
 # Header definition for Swagger UI
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
-# ── Logging setup ─────────────────────────────────────────────────────────────
+# ── Colored Logging ────────────────────────────────────────────────────────────
+
+class _ColoredFormatter(logging.Formatter):
+    """ANSI-colored log formatter for terminal output."""
+
+    RESET  = "\033[0m"
+    BOLD   = "\033[1m"
+    DIM    = "\033[2m"
+
+    LEVEL_COLORS = {
+        logging.DEBUG:    "\033[36m",          # Cyan
+        logging.INFO:     "\033[32m",          # Green
+        logging.WARNING:  "\033[33m",          # Yellow
+        logging.ERROR:    "\033[31m",          # Red
+        logging.CRITICAL: "\033[1m\033[31m",  # Bold Red
+    }
+
+    # Color per logger name prefix
+    NAME_COLORS = {
+        "billai.access":   "\033[34m",   # Blue
+        "billai.routes":   "\033[35m",   # Magenta
+        "billai.pipeline": "\033[36m",   # Cyan
+        "billai.db":       "\033[33m",   # Yellow
+        "billai.main":     "\033[32m",   # Green
+    }
+
+    def format(self, record: logging.LogRecord) -> str:
+        level_color = self.LEVEL_COLORS.get(record.levelno, self.RESET)
+        name_color  = self.NAME_COLORS.get(record.name, "\033[37m")  # White fallback
+
+        # Timestamp — dim grey
+        ts  = self.formatTime(record, self.datefmt)
+        dim = self.DIM
+        rst = self.RESET
+
+        # Level badge
+        level_badge = f"{level_color}{self.BOLD}{record.levelname:<8}{rst}"
+
+        # Logger name
+        name_str = f"{name_color}{record.name}{rst}"
+
+        # Message
+        msg = record.getMessage()
+        colored_msg = f"{level_color}{msg}{rst}"
+
+        line = f"{dim}{ts}{rst} | {level_badge} | {name_str} | {colored_msg}"
+
+        if record.exc_info:
+            line += "\n" + self.formatException(record.exc_info)
+
+        return line
+
 
 def _setup_logging() -> None:
-    fmt = "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
     datefmt = "%Y-%m-%d %H:%M:%S"
+    plain_fmt = "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
 
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(logging.Formatter(fmt, datefmt=datefmt))
+    # ── Console: colored output ──────────────────────────────────────────────
+    console = logging.StreamHandler(sys.stdout)
+    console.setFormatter(_ColoredFormatter(datefmt=datefmt))
 
-    # File handler — persistent logs
+    # ── File: plain text (no ANSI codes) ────────────────────────────────────
     Config.ensure_dirs()
     file_handler = logging.FileHandler(
         Config.LOGS_DIR / "api.log", encoding="utf-8"
     )
-    file_handler.setFormatter(logging.Formatter(fmt, datefmt=datefmt))
+    file_handler.setFormatter(logging.Formatter(plain_fmt, datefmt=datefmt))
 
     root = logging.getLogger()
     root.setLevel(logging.INFO)
     root.handlers.clear()
-    root.addHandler(handler)
+    root.addHandler(console)
     root.addHandler(file_handler)
 
-    # Silence noisy libs
-    for noisy in ("uvicorn.error", "watchfiles"):
+    # Silence noisy libraries
+    for noisy in ("uvicorn.error", "watchfiles", "httpx", "httpcore"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
@@ -58,7 +110,7 @@ log = logging.getLogger("billai.main")
 async def lifespan(app: FastAPI):
     log.info("=" * 60)
     log.info("Bill AI Backend starting up")
-    log.info(f"  Gemini model  : {Config.GEMINI_MODEL}")
+    log.info(f"  Groq model    : {Config.GROQ_MODEL}")
     log.info(f"  Supabase URL  : {Config.SUPABASE_URL or '(not set)'}")
     log.info(f"  Bucket        : {Config.SUPABASE_BUCKET}")
     log.info(f"  API Key set   : {'YES' if Config.API_SECRET_KEY else 'NO — SERVER INSECURE'}")
@@ -75,7 +127,7 @@ app = FastAPI(
 Hệ thống trích xuất hóa đơn thông minh dành cho Android client.
 
 ### Pipeline
-`Upload → Detect (YOLO) → Crop → OCR (VnCV) → Normalize (Gemini) → Supabase`
+`Upload → Detect (YOLO) → Crop → OCR (VnCV) → Normalize (Groq) → Supabase`
 
 ### Authentication
 Mọi request phải có header: `X-API-Key: <secret>`
@@ -109,6 +161,6 @@ async def health() -> dict:
     return {
         "status": "ok",
         "version": "1.0.0",
-        "model": Config.GEMINI_MODEL,
+        "model": Config.GROQ_MODEL,
         "supabase_configured": bool(Config.SUPABASE_URL and Config.SUPABASE_SERVICE_KEY),
     }

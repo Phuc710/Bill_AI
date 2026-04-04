@@ -44,12 +44,13 @@ class Config:
     DETECTOR_MODEL_PATH: Path = _BASE_DIR / "models" / "detec.pt"
     DETECTOR_CONF_THRESHOLD: float = _env_float("DETECTOR_CONF_THRESHOLD", 0.10)
 
-    # ── Gemini ─────────────────────────────────────────────────────────────
-    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
-    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash-lite")
-    GEMINI_MAX_INPUT_CHARS: int = _env_int("GEMINI_MAX_INPUT_CHARS", 2200)
-    GEMINI_MAX_INPUT_LINES: int = _env_int("GEMINI_MAX_INPUT_LINES", 120)
-    GEMINI_RETRY_DELAY: float = _env_float("GEMINI_RETRY_DELAY", 0.0)
+    # ── Groq (Primary LLM — Llama 3.3 70B) ────────────────────────────────
+    GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
+    GROQ_MODEL: str = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    GROQ_MAX_INPUT_CHARS: int = _env_int("GROQ_MAX_INPUT_CHARS", 2200)
+    GROQ_MAX_INPUT_LINES: int = _env_int("GROQ_MAX_INPUT_LINES", 120)
+
+
 
     # ── Security ───────────────────────────────────────────────────────────
     API_SECRET_KEY: str = os.getenv("API_SECRET_KEY", "")

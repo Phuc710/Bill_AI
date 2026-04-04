@@ -4,7 +4,7 @@
 > 
 > **Mục đích Mobile App (Kai Bill)**: "Trợ lý Tài chính Cá nhân Thông minh" giúp người dùng quản lý chi tiêu mượt mà không cần nhập tay. Chụp bill là biết tiền đi đâu.
 > 
-> **Stack**: FastAPI · YOLOv8 · VnCV OCR · Gemini AI · Supabase (Postgres + Storage + Auth)
+> **Stack**: FastAPI · YOLOv8 · VnCV OCR · Groq Llama 3.3 · Supabase (Postgres + Storage + Auth)
 
 ---
 
@@ -17,7 +17,7 @@
                                          ▼               ▼                      ▼
                                    [Supabase DB]  [YOLO Detect]         [VnCV OCR]
                                    status=detecting  ─crop─>             ─text─>
-                                         │         [Storage Upload]    [Gemini AI]
+                                         │         [Storage Upload]    [Groq Llama 3.3]
                                          │         Bills/Cropped/...      (Categorize)
                                          └───────── save_result ───────────┘
                                                    status=completed
@@ -61,7 +61,7 @@ curl http://localhost:8000/health
 {
   "status": "ok",
   "version": "3.0.0",
-  "model": "gemini-2.0-flash-lite",
+  "model": "llama-3.3-70b-versatile",
   "supabase_configured": true
 }
 ```
@@ -111,7 +111,7 @@ curl -X POST http://localhost:8000/bills/extract \
     "needs_review":      false,
     "detect_confidence": 0.8540,
     "processing_ms":     4200.0,
-    "gemini_error":      null
+    "llm_error":      null
   }
 }
 ```
@@ -136,7 +136,7 @@ curl -X POST http://localhost:8000/bills/extract \
 |------|-------------|
 | `detect` | YOLO không tìm thấy bill trong ảnh |
 | `ocr` | OCR không đọc được văn bản sau khi crop |
-| `gemini` | Gemini lỗi (quota, timeout...) |
+| `llm` | AI lỗi (quota, timeout...) |
 | `db_init` | Không kết nối được Supabase |
 | `unknown` | Lỗi không xác định |
 
@@ -218,7 +218,7 @@ curl -X DELETE http://localhost:8000/bills/550e8400-... \
 ```sql
 id, user_id, status, failed_step, error_message
 original_image_url, cropped_image_url
-ocr_raw_text, gemini_raw_response
+ocr_raw_text, llm_raw_response
 store_name, address, phone, invoice_number
 issued_at, closed_at, cashier_name, table_number
 currency

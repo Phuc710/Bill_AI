@@ -46,7 +46,7 @@ class PipelineTracker:
             "bill_count": 0,
             "ocr_raw_text": "",
             "ocr_confidence_avg": 0.0,
-            "gemini_raw": "",
+            "llm_raw": "",
             "result": None,
             "structured": None,
             "validation": {},
@@ -96,8 +96,8 @@ class PipelineTracker:
         self._log["ocr_raw_text"] = raw_text
         self._log["ocr_confidence_avg"] = round(float(confidence_avg), 4)
 
-    def set_gemini(self, raw_response: str) -> None:
-        self._log["gemini_raw"] = raw_response
+    def set_llm(self, raw_response: str) -> None:
+        self._log["llm_raw"] = raw_response
 
     def set_result(
         self,
