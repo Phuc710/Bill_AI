@@ -22,33 +22,51 @@ from core.config import Config
 
 
 _SYSTEM_PROMPT = """Bạn là chuyên gia kế toán Việt Nam.
-Nhiệm vụ: Trích xuất thông tin từ văn bản OCR hóa đơn/biên lai và trả về STRICT JSON.
+Nhiệm vụ: Phân tích OCR hóa đơn và xuất ra cấu trúc JSON CHUYÊN NGHIỆP sau. Tự sửa lỗi chính tả và gộp các món trùng lặp (ví dụ: Coca xuất hiện 2 lần thì cộng qty lại).
 
-Schema BẮT BUỘC (không thêm key khác):
+Schema BẮT BUỘC:
 {
-  "store_name": "Tên cửa hàng hoặc null",
-  "address": "Địa chỉ hoặc null",
-  "phone": "Số điện thoại hoặc null",
-  "invoice_id": "Mã hóa đơn hoặc null",
-  "datetime_in": "DD/MM/YYYY HH:MM hoặc DD/MM/YYYY hoặc null",
-  "datetime_out": "DD/MM/YYYY HH:MM hoặc null",
-  "cashier": "Tên thu ngân hoặc null",
-  "table": "Số bàn hoặc null",
-  "items": [
-    {"name": "Tên món", "quantity": 1, "unit_price": 0, "total_price": 0}
-  ],
-  "subtotal": 0,
-  "total": 0,
-  "cash_given": 0,
-  "cash_change": 0,
-  "category": "Food & Beverage | Grocery | Transport | Entertainment | Healthcare | Shopping | Other"
+    "metadata": {
+        "bill_type": "Dining / Shopping / Travel / Healthcare / Other",
+        "language": "Tiếng Việt",
+        "currency": "VND"
+    },
+    "shop": {
+        "name": "Tên quán hoặc null",
+        "address": "Địa chỉ hoặc null",
+        "phone": "SĐT hoặc null",
+        "invoice_id": "Mã hóa đơn hoặc null"
+    },
+    "transaction": {
+        "datetime": "YYYY-MM-DD HH:MM hoặc null",
+        "payment_method": "Cash/Card/Transfer hoặc null",
+        "subtotal": 0,
+        "cash_given": 0,
+        "cash_change": 0,
+        "total_final": 0
+    },
+    "items": [
+        {"name": "Món A", "qty": 1, "unit_price": 0, "amount": 0}
+    ],
+    "ai_assessment": {
+        "category": "Ăn uống | Mua sắm | Di chuyển | Giải trí | Sức khỏe | Khác",
+        "summary": "Tóm tắt ngắn gọn"
+    }
 }
 
-Quy tắc:
-- Tự sửa lỗi OCR (chính tả, dấu tiếng Việt sai)
-- Số tiền luôn là Integer (VND, bỏ dấu phẩy/chấm)
-- Nếu không tìm thấy giá trị → null (số nguyên → 0)
-- CHỈ trả về JSON, KHÔNG có markdown, KHÔNG có giải thích"""
+Yêu cầu Category nghiêm ngặt (Chỉ chọn 1):
+- 'Ăn uống': Nhà hàng, cafe, trà sữa, quán ăn.
+- 'Mua sắm': Siêu thị, bách hóa, shop thời trang.
+- 'Di chuyển': Taxi, xăng dầu, máy bay.
+- 'Giải trí': Phim ảnh, tham quan.
+- 'Sức khỏe': Nhà thuốc, bệnh viện.
+- 'Khác': Hóa đơn lạ.
+
+Quy tắc số liệu:
+1. 'total_final' là số tiền cuối cùng khách trả. Số tiền luôn là Int (VD: 250000) bỏ chấm phẩy.
+2. Nếu OCR quét sai/trùng món, hãy CỘNG DỒN số lượng như một kế toán.
+3. KHÔNG output Markdown, chỉ xuất JSON thuần.
+"""
 
 
 class GroqExtractor:
@@ -156,23 +174,27 @@ def _parse_response(raw: str, raw_text: str) -> Dict[str, Any]:
     if payload is None:
         return _empty_structured(raw_text=raw_text)
 
+    shop = payload.get("shop") or {}
+    trans = payload.get("transaction") or {}
+    assess = payload.get("ai_assessment") or {}
+    
     items = _parse_items(payload.get("items"))
     return {
-        "store_name":   _str(payload.get("store_name")),
-        "address":      _str(payload.get("address")),
-        "phone":        _str(payload.get("phone")),
-        "invoice_id":   _str(payload.get("invoice_id")),
-        "datetime_in":  _str(payload.get("datetime_in")),
-        "datetime_out": _str(payload.get("datetime_out")),
-        "cashier":      _str(payload.get("cashier")),
-        "table":        _str(payload.get("table")),
+        "store_name":   _str(shop.get("name")),
+        "address":      _str(shop.get("address")),
+        "phone":        _str(shop.get("phone")),
+        "invoice_id":   _str(shop.get("invoice_id")),
+        "datetime_in":  _str(trans.get("datetime")),
+        "datetime_out": None,
+        "cashier":      None,
+        "table":        None,
         "items":        items,
-        "subtotal":     _opt_int(payload.get("subtotal")),
-        "total":        _int(payload.get("total")),
-        "cash_given":   _opt_int(payload.get("cash_given")),
-        "cash_change":  _opt_int(payload.get("cash_change")),
-        "payment_method": _str(payload.get("payment_method")),
-        "category":     _str(payload.get("category")) or "Other",
+        "subtotal":     _opt_int(trans.get("subtotal")),
+        "total":        _int(trans.get("total_final")),
+        "cash_given":   _opt_int(trans.get("cash_given")),
+        "cash_change":  _opt_int(trans.get("cash_change")),
+        "payment_method": _str(trans.get("payment_method")),
+        "category":     _str(assess.get("category")) or "Khác",
         "raw_text":     raw_text,
     }
 
@@ -207,9 +229,9 @@ def _parse_items(value: Any) -> List[Dict[str, Any]]:
             continue
         items.append({
             "name":        name,
-            "quantity":    max(1, _int(item.get("quantity"), default=1)),
+            "quantity":    max(1, _int(item.get("qty", item.get("quantity")), default=1)),
             "unit_price":  max(0, _int(item.get("unit_price"))),
-            "total_price": max(0, _int(item.get("total_price"))),
+            "total_price": max(0, _int(item.get("amount", item.get("total_price")))),
         })
     return items
 

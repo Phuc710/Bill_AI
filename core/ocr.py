@@ -11,8 +11,11 @@ from __future__ import annotations
 
 import contextlib
 import io
+import io
 import os
+import sys
 import tempfile
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
@@ -25,6 +28,25 @@ class OCRTextResult:
     text_raw: str
     confidence_avg: float
 
+@contextmanager
+def _suppress_c_output():
+    # Set environment variables to silence ONNX Runtime and other deep-level logs
+    os.environ["ORT_LOGGING_LEVEL"] = "3"  # 3 = ERROR
+    
+    import logging
+    # Silence all loggers
+    logging.getLogger().setLevel(logging.ERROR)
+    
+    from contextlib import redirect_stdout, redirect_stderr
+    import io
+    
+    with open(os.devnull, "w") as fnull:
+        with redirect_stdout(fnull), redirect_stderr(fnull):
+            try:
+                yield
+            finally:
+                pass
+
 
 class OCREngine:
     def extract_text(self, image: Image.Image) -> OCRTextResult:
@@ -34,9 +56,8 @@ class OCREngine:
             tmp_path = tmp.name
 
         try:
-            # Suppress tất cả log noise của vncv khi load model
-            with contextlib.redirect_stdout(io.StringIO()), \
-                 contextlib.redirect_stderr(io.StringIO()):
+            # Suppress tất cả log noise của vncv (kể cả C/C++ ONNX runtime)
+            with _suppress_c_output():
                 raw_items = extract_text(tmp_path, lang="vi", return_dict=True)
 
             lines, confs = self._parse(raw_items or [])

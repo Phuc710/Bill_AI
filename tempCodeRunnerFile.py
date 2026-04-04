@@ -1,31 +1,7 @@
 import os
 import time
 import json
-import sys
-from contextlib import contextmanager
 from groq import Groq
-from dotenv import load_dotenv
-
-load_dotenv()
-
-@contextmanager
-def suppress_output():
-    # Set environment variables to silence ONNX Runtime and other deep-level logs
-    os.environ["ORT_LOGGING_LEVEL"] = "3"  # 3 = ERROR
-    
-    import logging
-    # Silence all loggers
-    logging.getLogger().setLevel(logging.ERROR)
-    
-    from contextlib import redirect_stdout, redirect_stderr
-    import io
-    
-    with open(os.devnull, "w") as fnull:
-        with redirect_stdout(fnull), redirect_stderr(fnull):
-            try:
-                yield
-            finally:
-                pass
 
 # Thư viện Viet Nam CV OCR hoạt động 100% Offline (Không lo sập web)
 from vncv import extract_text
@@ -42,9 +18,8 @@ def process_bill_with_vncv(image_path):
     t_ocr_start = time.time()
     print(f"\n⏳ CÔNG ĐOẠN 1: Dùng VNCV OCR để quét ảnh Offline [{image_path}]...")
     try:
-        # vncv.extract_text trả về một List các dòng text.
-        with suppress_output():
-            raw_text_list = extract_text(image_path)
+        # vncv.extract_text trả về một List các dòng text. Ta ghép lại bằng ký tự xuống dòng (\n)
+        raw_text_list = extract_text(image_path)
         
         if not raw_text_list:
             print("❌ OCR thất bại, không nhìn ra chữ nào trên ảnh.")
@@ -107,36 +82,3 @@ Schema BẮT BUỘC:
 }
 
 Quy tắc:
-1. 'total_final' là số tiền thật khách trả. Số tiền là Int bỏ chấm phẩy.
-2. CỘNG DỒN số lượng nếu trùng món.
-3. KHÔNG CÓ KÝ TỰ MARKDOWN ```json."""
-                },
-                {
-                    "role": "user",
-                    "content": f"Chuyển cái này qua JSON:\n{raw_text}"
-                }
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.0
-        )
-
-        final_data = json.loads(chat.choices[0].message.content)
-        t_llm_end = time.time()
-        
-        print("✅ OUTPUT CUỐI CÙNG:")
-        print(json.dumps(final_data, indent=4, ensure_ascii=False))
-    
-        t_total_end = time.time()
-        print("\n" + "=" * 50)
-        print("⏱️ THỐNG KÊ THỜI GIAN THỰC THI (TRACKING TIME):")
-        print("-" * 50)
-        print(f"👉 1. Thời gian cào OCR (vncv Offline):   {t_ocr_end - t_ocr_start:.2f} giây")
-        print(f"👉 2. Thời gian AI xử lý JSON (Groq):     {t_llm_end - t_llm_start:.2f} giây")
-        print(f"🚀 TÔNG THỜI GIAN TOÀN BỘ QUY TRÌNH:      {t_total_end - t_start:.2f} giây")
-        print("=" * 50)
-        
-    except Exception as e:
-        print(f"❌ Có lỗi ở khâu Groq AI: {e}")
-
-if __name__ == "__main__":
-    process_bill_with_vncv("bill2.jpg")

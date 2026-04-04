@@ -35,15 +35,30 @@ outputs/
 .paddleocr/
 inference/
 
+# Environment & Secrets (CRITICAL)
+.env
+.env.*
+venv/
+env/
+ENV/
+*.venv/
+.venv/
+.python-version
+
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+*.iml
+.classpath
+.project
+.settings/
 
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
 
 # Build / dist
 dist/

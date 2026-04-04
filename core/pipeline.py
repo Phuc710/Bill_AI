@@ -21,10 +21,8 @@ from PIL import Image, ImageOps
 
 from core.config import Config
 from core.database import DatabaseService
-from core.detector import BillDetector, DetectionRegion, NoBillError
 from core.groq_extractor import GroqExtractor
 from core.ocr import OCREngine, OCRTextResult
-from core.standardizer import ImageStandardizer
 from core.storage import StorageService
 
 log = logging.getLogger("billai.pipeline")
@@ -32,8 +30,6 @@ log = logging.getLogger("billai.pipeline")
 
 class InvoicePipeline:
     def __init__(self) -> None:
-        self._detector     = BillDetector()
-        self._standardizer = ImageStandardizer()
         self._ocr          = OCREngine()
         self._extractor    = GroqExtractor()
 
@@ -68,38 +64,25 @@ class InvoicePipeline:
             orig_url = StorageService.upload_image(image, bill_id, "Original")
             log.info(f"[{bill_id}] Original uploaded: {orig_url}")
 
-            # ── Step 3: Detect & Crop ──────────────────────────────────────
-            region = self._detect(image)
-            if region is None:
-                log.warning(f"[{bill_id}] Detection failed — Fallback to FULL IMAGE OCR")
-                cropped = image
-                crop_url = orig_url
-                detect_conf = 0.0
-                DatabaseService.update_status(bill_id, "ocr_done")
-            else:
-                log.info(f"[{bill_id}] Detected conf={region.confidence:.3f} bbox={region.bbox}")
-                DatabaseService.update_status(bill_id, "cropping")
-                cropped = self._standardizer.standardize(image, region.bbox)
-                crop_url = StorageService.upload_image(cropped, bill_id, "Cropped")
-                log.info(f"[{bill_id}] Cropped uploaded: {crop_url}")
-                detect_conf = region.confidence
-
-            # ── Step 5: OCR (VnCV) ─────────────────────────────────────────
-            ocr = self._ocr.extract_text(cropped)
+            # ── Step 3: OCR Full Image (VnCV) ──────────────────────────────
+            DatabaseService.update_status(bill_id, "ocr_done")
+            ocr = self._ocr.extract_text(image)
+            
+            # Quét chữ OCR rồi lưu trạng thái nếu có
             DatabaseService.update_status(
                 bill_id, "ocr_done",
                 ocr_raw_text=ocr.text_raw or "",
             )
             log.info(
-                f"[{bill_id}] OCR done | chars={len(ocr.text_raw or '')} "
+                f"[{bill_id}] OCR Full done | chars={len(ocr.text_raw or '')} "
                 f"conf={ocr.confidence_avg:.3f}"
             )
 
-            # ── Smart Exit: OCR empty ──────────────────────────────────────
+            # ── Guard Clause: Không thấy chữ ───────────────────────────────
             if not (ocr.text_raw or "").strip():
-                DatabaseService.mark_failed(bill_id, "ocr", "OCR không đọc được văn bản")
-                log.warning(f"[{bill_id}] OCR empty — skipping Groq")
-                return self._ocr_empty_response(bill_id, orig_url, crop_url, detect_conf, t0)
+                DatabaseService.mark_failed(bill_id, "ocr", "Không tìm thấy hóa đơn (None Text Detected)")
+                log.warning(f"[{bill_id}] OCR empty — returning NOT FOUND status")
+                return self._ocr_empty_response(bill_id, orig_url, t0)
 
             # ── Step 6: Groq Llama 3.3 70B ─────────────────────────────────────
             DatabaseService.update_status(bill_id, "normalizing")
@@ -115,7 +98,7 @@ class InvoicePipeline:
             structured = extraction.get("structured") or {}
             items: List[Dict[str, Any]] = structured.get("items") or []
             processing_ms = (time.perf_counter() - t0) * 1000
-            needs_review = self._needs_review(structured, detect_conf, ocr.confidence_avg, error_type)
+            needs_review = self._needs_review(structured, ocr.confidence_avg, error_type)
 
             DatabaseService.save_result(
                 invoice_id=bill_id,
@@ -124,8 +107,8 @@ class InvoicePipeline:
                 ocr_raw_text=ocr.text_raw or "",
                 llm_raw=raw_response,
                 orig_url=orig_url,
-                crop_url=crop_url,
-                detect_confidence=detect_conf,
+                crop_url=orig_url,  # Giữ cho db/frontend ko bị lỗi khuyết cột
+                detect_confidence=1.0, # Mặc định 1.0 vì bỏ detector
                 ocr_confidence=ocr.confidence_avg,
                 processing_ms=processing_ms,
                 needs_review=needs_review,
@@ -140,8 +123,6 @@ class InvoicePipeline:
                 structured=structured,
                 items=items,
                 orig_url=orig_url,
-                crop_url=crop_url,
-                detect_confidence=detect_conf,
                 processing_ms=processing_ms,
                 needs_review=needs_review,
                 llm_error=error_type,
@@ -165,22 +146,15 @@ class InvoicePipeline:
         gray = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2GRAY)
         return img, gray
 
-    def _detect(self, image: Image.Image) -> Optional[DetectionRegion]:
-        try:
-            return self._detector.detect(image)
-        except NoBillError:
-            return None
+
 
     @staticmethod
     def _needs_review(
         structured: Dict[str, Any],
-        detect_conf: float,
         ocr_conf: float,
         llm_error: Optional[str],
     ) -> bool:
         if llm_error:
-            return True
-        if detect_conf < Config.DETECTOR_CONF_THRESHOLD:
             return True
         if ocr_conf < Config.OCR_MIN_CONF:
             return True
@@ -196,8 +170,6 @@ class InvoicePipeline:
         structured: Dict[str, Any],
         items: List[Dict[str, Any]],
         orig_url: Optional[str],
-        crop_url: Optional[str],
-        detect_confidence: float,
         processing_ms: float,
         needs_review: bool,
         llm_error: Optional[str],
@@ -206,7 +178,7 @@ class InvoicePipeline:
             "bill_id": bill_id,
             "status": "completed",
             "original_image_url": orig_url,
-            "cropped_image_url": crop_url,
+            "cropped_image_url": orig_url,
             "data": {
                 "store_name":     structured.get("store_name"),
                 "address":        structured.get("address"),
@@ -224,7 +196,7 @@ class InvoicePipeline:
             "items": items,
             "meta": {
                 "needs_review":       needs_review,
-                "detect_confidence":  round(detect_confidence, 4),
+                "detect_confidence":  1.0,
                 "processing_ms":      round(processing_ms, 1),
                 "llm_error":          llm_error,
             },
@@ -250,21 +222,19 @@ class InvoicePipeline:
     def _ocr_empty_response(
         bill_id: str,
         orig_url: Optional[str],
-        crop_url: Optional[str],
-        detect_conf: float,
         t0: float,
     ) -> Dict[str, Any]:
         return {
             "bill_id": bill_id,
             "status": "failed",
             "failed_step": "ocr",
-            "message": "OCR không đọc được văn bản từ hóa đơn",
+            "message": "Không tìm thấy hóa đơn (None Text Detected)",
             "original_image_url": orig_url,
-            "cropped_image_url": crop_url,
+            "cropped_image_url": orig_url,
             "data": None,
             "items": [],
             "meta": {
-                "detect_confidence": round(detect_conf, 4),
+                "detect_confidence": 1.0,
                 "processing_ms": round((time.perf_counter() - t0) * 1000, 1),
             },
         }

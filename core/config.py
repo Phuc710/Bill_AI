@@ -40,10 +40,6 @@ class Config:
     OUTPUTS_DIR: Path = _BASE_DIR / "outputs"
     EXTRACTION_PROMPT: Path = _BASE_DIR / "extraction_vi.txt"
 
-    # ── Model ──────────────────────────────────────────────────────────────
-    DETECTOR_MODEL_PATH: Path = _BASE_DIR / "models" / "detec.pt"
-    DETECTOR_CONF_THRESHOLD: float = _env_float("DETECTOR_CONF_THRESHOLD", 0.10)
-
     # ── Groq (Primary LLM — Llama 3.3 70B) ────────────────────────────────
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
     GROQ_MODEL: str = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
