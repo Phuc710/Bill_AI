@@ -1,7 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- ProfileFragment: thông tin tài khoản, nút đăng xuất -->
-<ScrollView
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -11,146 +9,180 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:paddingHorizontal="24dp"
-        android:paddingVertical="32dp">
+        android:padding="20dp"
+        android:paddingTop="@dimen/main_page_top_padding">
 
-        <!-- Header -->
         <TextView
-            style="@style/PolarisAppTitle"
+            style="@style/PolarisPageTitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Tài khoản"
-            android:textSize="28sp"
-            android:paddingBottom="24dp"/>
+            android:text="@string/profile_title" />
 
-        <!-- User Info Card -->
+        <TextView
+            style="@style/PolarisPageSubtitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="@string/profile_subtitle" />
+
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            app:cardCornerRadius="4dp"
+            android:layout_marginTop="16dp"
+            app:cardBackgroundColor="@color/bg_card"
+            app:cardCornerRadius="28dp"
             app:cardElevation="0dp"
-            app:strokeWidth="1dp"
             app:strokeColor="@color/border_card"
-            app:cardBackgroundColor="@color/bg_card">
+            app:strokeWidth="1dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="24dp">
+                android:padding="20dp">
 
                 <TextView
                     style="@style/PolarisAppSubText"
-                    android:layout_width="match_parent"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="ĐĂNG NHẬP VỚI"
-                    android:textSize="12sp"
-                    android:letterSpacing="0.05"
-                    android:textStyle="bold"/>
+                    android:text="@string/profile_account_label" />
 
                 <TextView
                     android:id="@+id/tvUserEmail"
                     style="@style/PolarisAppTitle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:textSize="18sp"
-                    android:layout_marginTop="8dp"
-                    android:text="user@gmail.com"/>
+                    android:layout_marginTop="6dp"
+                    android:text="@string/placeholder_email" />
 
+                <TextView
+                    android:id="@+id/tvSyncStatus"
+                    style="@style/PolarisAppSubText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="@string/profile_sync_default" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Stats Card -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:orientation="horizontal">
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                app:cardBackgroundColor="@color/bg_card"
+                app:cardCornerRadius="24dp"
+                app:cardElevation="0dp"
+                app:strokeColor="@color/border_card"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="18dp">
+
+                    <TextView
+                        style="@style/PolarisAppSubText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/profile_total_bills" />
+
+                    <TextView
+                        android:id="@+id/tvTotalBills"
+                        style="@style/PolarisHeroTitle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="@string/placeholder_count"
+                        android:textSize="28sp" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <Space
+                android:layout_width="12dp"
+                android:layout_height="1dp" />
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                app:cardBackgroundColor="@color/bg_card"
+                app:cardCornerRadius="24dp"
+                app:cardElevation="0dp"
+                app:strokeColor="@color/border_card"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="18dp">
+
+                    <TextView
+                        style="@style/PolarisAppSubText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/profile_total_spend" />
+
+                    <TextView
+                        android:id="@+id/tvTotalAmount"
+                        style="@style/PolarisHeroTitle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="@string/placeholder_amount"
+                        android:textSize="28sp" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+        </LinearLayout>
+
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            app:cardCornerRadius="4dp"
+            android:layout_marginTop="18dp"
+            app:cardBackgroundColor="@color/accent_sky_soft"
+            app:cardCornerRadius="24dp"
             app:cardElevation="0dp"
-            app:strokeWidth="1dp"
             app:strokeColor="@color/border_card"
-            app:cardBackgroundColor="@color/bg_card">
+            app:strokeWidth="1dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:paddingVertical="24dp"
-                android:paddingHorizontal="16dp">
+                android:orientation="vertical"
+                android:padding="18dp">
 
-                <LinearLayout
-                    android:layout_width="0dp"
+                <TextView
+                    style="@style/PolarisAppTitle"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical"
-                    android:gravity="center">
-                    <TextView
-                        android:id="@+id/tvTotalBills"
-                        style="@style/PolarisAppTitle"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="0"
-                        android:textColor="@color/accent_indigo"
-                        android:textSize="32sp"/>
-                    <TextView
-                        style="@style/PolarisAppSubText"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:text="Tổng hóa đơn"/>
-                </LinearLayout>
+                    android:text="@string/profile_review_title"
+                    android:textSize="18sp" />
 
-                <View
-                    android:layout_width="1dp"
-                    android:layout_height="match_parent"
-                    android:background="@color/divider"/>
-
-                <LinearLayout
-                    android:layout_width="0dp"
+                <TextView
+                    android:id="@+id/tvReviewInfo"
+                    style="@style/PolarisAppSubText"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical"
-                    android:gravity="center">
-                    <TextView
-                        android:id="@+id/tvTotalAmount"
-                        style="@style/PolarisAppTitle"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="0đ"
-                        android:textSize="22sp"/>
-                    <TextView
-                        style="@style/PolarisAppSubText"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:text="Đã chi tiêu"/>
-                </LinearLayout>
-
+                    android:layout_marginTop="8dp"
+                    android:text="@string/profile_review_default" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Logout Button -->
-        <androidx.appcompat.widget.AppCompatButton
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btnLogout"
+            style="@style/Widget.Material3.Button.OutlinedButton"
             android:layout_width="match_parent"
-            android:layout_height="52dp"
-            android:layout_marginTop="32dp"
-            android:background="@drawable/bg_outline_button"
-            android:textColor="@color/error_red"
-            android:textStyle="bold"
+            android:layout_height="54dp"
+            android:layout_marginTop="24dp"
+            android:text="@string/profile_logout"
             android:textAllCaps="false"
-            android:textSize="15sp"
-            android:text="Đăng xuất khỏi thiết bị"/>
-
-        <!-- App version -->
-        <TextView
-            style="@style/PolarisAppSubText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Bill AI v1.0 • SaaS Edition"
-            android:gravity="center"
-            android:layout_marginTop="48dp"
-            android:textSize="12sp"/>
-
+            app:cornerRadius="18dp" />
     </LinearLayout>
 </ScrollView>

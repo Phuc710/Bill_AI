@@ -1,6 +1,7 @@
 package com.example.myapplication.ui.history
 
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
@@ -9,13 +10,10 @@ import com.bumptech.glide.Glide
 import com.example.myapplication.R
 import com.example.myapplication.data.model.BillSummary
 import com.example.myapplication.databinding.ItemBillBinding
-import java.text.NumberFormat
-import java.util.Locale
+import com.example.myapplication.util.statusLabel
+import com.example.myapplication.util.toCurrencyText
+import com.example.myapplication.util.toDisplayDate
 
-/**
- * BillsAdapter — RecyclerView adapter dùng DiffUtil để tối ưu rendering.
- * Mỗi row = 1 BillSummary → hiển thị: thumbnail, store name, date, total.
- */
 class BillsAdapter(
     private val onClick: (BillSummary) -> Unit
 ) : ListAdapter<BillSummary, BillsAdapter.BillViewHolder>(BillDiffCallback()) {
@@ -29,28 +27,25 @@ class BillsAdapter(
         holder.bind(getItem(position))
     }
 
-    inner class BillViewHolder(private val binding: ItemBillBinding) :
-        RecyclerView.ViewHolder(binding.root) {
+    inner class BillViewHolder(
+        private val binding: ItemBillBinding
+    ) : RecyclerView.ViewHolder(binding.root) {
 
         fun bind(bill: BillSummary) {
-            // Store name — fallback if null
-            binding.tvStoreName.text = bill.store_name?.ifBlank { "Hóa đơn" } ?: "Hóa đơn"
+            val context = binding.root.context
+            binding.tvStoreName.text = bill.store_name?.ifBlank { context.getString(R.string.history_store_fallback) }
+                ?: context.getString(R.string.history_store_fallback)
+            binding.tvDate.text = bill.created_at.toDisplayDate()
+            binding.tvTotal.text = bill.total.toCurrencyText()
+            binding.tvMeta.text = listOfNotNull(
+                bill.payment_method?.takeIf(String::isNotBlank),
+                bill.item_count?.let { context.getString(R.string.history_item_count, it) }
+            ).joinToString(" • ").ifBlank { context.getString(R.string.history_meta_saved) }
 
-            // Date — format từ ISO string
-            binding.tvDate.text = formatDate(bill.created_at)
+            val showStatus = bill.needs_review || bill.status.equals("failed", ignoreCase = true)
+            binding.tvStatus.visibility = if (showStatus) View.VISIBLE else View.GONE
+            binding.tvStatus.text = bill.statusLabel()
 
-            // Total — format VND
-            binding.tvTotal.text = formatCurrency(bill.total ?: 0)
-
-            // Needs review badge
-            if (bill.needs_review || bill.status == "failed") {
-                binding.tvStatus.visibility = ViewGroup.VISIBLE
-                binding.tvStatus.text = if (bill.failed_step != null) "⚠ Xử lý thất bại" else "⚠ Cần kiểm tra"
-            } else {
-                binding.tvStatus.visibility = ViewGroup.GONE
-            }
-
-            // Thumbnail from Supabase Storage URL
             if (!bill.cropped_image_url.isNullOrBlank()) {
                 Glide.with(binding.ivCroppedThumb)
                     .load(bill.cropped_image_url)
@@ -63,23 +58,10 @@ class BillsAdapter(
 
             binding.root.setOnClickListener { onClick(bill) }
         }
-
-        private fun formatDate(isoDate: String): String {
-            return try {
-                val parts = isoDate.substringBefore("T").split("-")
-                "${parts[2]}/${parts[1]}/${parts[0]}"
-            } catch (e: Exception) {
-                isoDate
-            }
-        }
-
-        private fun formatCurrency(amount: Long): String {
-            return NumberFormat.getNumberInstance(Locale.forLanguageTag("vi-VN")).format(amount) + "đ"
-        }
     }
 
     class BillDiffCallback : DiffUtil.ItemCallback<BillSummary>() {
-        override fun areItemsTheSame(old: BillSummary, new: BillSummary) = old.id == new.id
-        override fun areContentsTheSame(old: BillSummary, new: BillSummary) = old == new
+        override fun areItemsTheSame(oldItem: BillSummary, newItem: BillSummary): Boolean = oldItem.id == newItem.id
+        override fun areContentsTheSame(oldItem: BillSummary, newItem: BillSummary): Boolean = oldItem == newItem
     }
 }

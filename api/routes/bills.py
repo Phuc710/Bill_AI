@@ -200,6 +200,7 @@ def _format_bill(bill: dict) -> dict:
             "cash_given":     bill.get("cash_tendered"),
             "cash_change":    bill.get("cash_change"),
             "payment_method": bill.get("payment_method"),
+            "category":       bill.get("category", "Khác"),
             "currency":       bill.get("currency", "VND"),
         },
         "items": [

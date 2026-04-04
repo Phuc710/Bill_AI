@@ -1,5 +1,6 @@
 package com.example.myapplication.data.repository
 
+import android.os.Build
 import com.example.myapplication.BuildConfig
 import com.example.myapplication.data.api.RetrofitClient
 import com.example.myapplication.data.api.SupabaseManager
@@ -10,6 +11,9 @@ import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
+import java.net.ConnectException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 
 class BillRepository {
 
@@ -29,10 +33,18 @@ class BillRepository {
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!)
             } else {
-                Result.failure(Exception("Upload Failed: ${response.errorBody()?.string()}"))
+                val errorBody = response.errorBody()?.string()?.takeIf { it.isNotBlank() }
+                val message = buildString {
+                    append("Upload failed with HTTP ${response.code()}")
+                    if (!errorBody.isNullOrBlank()) {
+                        append(": ")
+                        append(errorBody)
+                    }
+                }
+                Result.failure(Exception(message))
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(Exception(buildUploadErrorMessage(e), e))
         }
     }
 
@@ -131,5 +143,32 @@ class BillRepository {
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    private fun buildUploadErrorMessage(error: Exception): String {
+        val baseUrl = BuildConfig.BASE_URL.trimEnd('/')
+        return when (error) {
+            is ConnectException, is UnknownHostException, is SocketTimeoutException -> {
+                buildString {
+                    append("Cannot reach backend at ")
+                    append(baseUrl)
+                    append(".")
+                    if (isProbablyRunningOnEmulator()) {
+                        append(" If you are testing on Android Emulator, use http://10.0.2.2:8000/ for a backend running on this PC.")
+                    }
+                }
+            }
+            else -> error.message ?: "Unknown upload error"
+        }
+    }
+
+    private fun isProbablyRunningOnEmulator(): Boolean {
+        return Build.FINGERPRINT.contains("generic", ignoreCase = true) ||
+            Build.MODEL.contains("Emulator", ignoreCase = true) ||
+            Build.MODEL.contains("Android SDK built for", ignoreCase = true) ||
+            Build.MANUFACTURER.contains("Genymotion", ignoreCase = true) ||
+            Build.HARDWARE.contains("goldfish", ignoreCase = true) ||
+            Build.HARDWARE.contains("ranchu", ignoreCase = true) ||
+            Build.PRODUCT.contains("sdk", ignoreCase = true)
     }
 }

@@ -87,6 +87,8 @@ class DatabaseService:
             "cashier_name":         structured.get("cashier"),
             "table_number":         structured.get("table"),
             "payment_method":       structured.get("payment_method"),
+            # Danh mục chi tiêu (AI phân loại)
+            "category":             structured.get("category", "Khác"),
             # Tiền tệ
             "total_amount":         int(structured.get("total") or 0),
             "subtotal":             structured.get("subtotal"),
@@ -180,7 +182,7 @@ class DatabaseService:
                 cls._db().table("invoices")
                 .select(
                     "id, user_id, status, store_name, total_amount, currency, "
-                    "payment_method, cropped_image_url, needs_review, "
+                    "payment_method, category, cropped_image_url, needs_review, "
                     "created_at, failed_step, issued_at"
                 )
                 .eq("user_id", user_id)
@@ -215,7 +217,7 @@ class DatabaseService:
         try:
             res = (
                 cls._db().table("invoices")
-                .select("id, store_name, total_amount, payment_method, status, issued_at, created_at")
+                .select("id, store_name, total_amount, payment_method, category, status, issued_at, created_at")
                 .eq("user_id", user_id)
                 .gte("created_at", f"{from_date}T00:00:00Z")
                 .lte("created_at", f"{to_date}T23:59:59Z")

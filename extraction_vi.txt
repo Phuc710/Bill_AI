@@ -4,6 +4,12 @@ QUY TẮC:
 2. Tiền tệ (VND) phải chuyển thành số nguyên (ví dụ: "20.000" -> 20000).
 3. Định dạng ngày giờ: Giữ nguyên văn bản từ OCR.
 4. Phương thức thanh toán: CASH, CARD, hoặc TRANSFER.
+5. Phân loại category dựa trên tên cửa hàng và danh sách mặt hàng:
+   - "Ăn uống"  : nhà hàng, quán ăn, quán nhậu, cà phê, trà sữa, bánh, pizza, burger, phở, bún, cơm, beer, bia, BBQ
+   - "Di chuyển": Grab, Be, Gojek, xăng, dầu, taxi, vé xe, vé máy bay, parking, bãi xe, sửa xe
+   - "Mua sắm"  : siêu thị, cửa hàng tiện lợi (Circle K, 7-Eleven, FamilyMart, Vinmart), quần áo, giày, mỹ phẩm, điện thoại, laptop
+   - "Dịch vụ"  : tiền điện, tiền nước, internet, rác, chung cư, bảo hiểm, y tế, bệnh viện, phòng khám, thuốc
+   - "Khác"     : các trường hợp không thuộc nhóm trên
 
 SCHEMA JSON:
 {
@@ -20,5 +26,6 @@ SCHEMA JSON:
   "total": 0,
   "cash_given": 0,
   "cash_change": 0,
-  "payment_method": "CASH"
+  "payment_method": "CASH",
+  "category": "Ăn uống"
 }

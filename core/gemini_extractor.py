@@ -172,7 +172,7 @@ def _parse_response(raw: str, raw_text: str) -> Dict[str, Any]:
         "total":          _int(payload.get("total")),
         "cash_given":     _opt_int(payload.get("cash_given")),
         "cash_change":    _opt_int(payload.get("cash_change")),
-        "payment_method": _str(payload.get("payment_method")),
+        "category":       _str(payload.get("category")) or "Khác",
         "raw_text":       raw_text,
     }
 
@@ -220,7 +220,7 @@ def _empty_structured(raw_text: str = "") -> Dict[str, Any]:
         "invoice_id": None, "datetime_in": None, "datetime_out": None,
         "cashier": None, "table": None, "items": [],
         "subtotal": None, "total": 0, "cash_given": None,
-        "cash_change": None, "payment_method": None, "raw_text": raw_text,
+        "cash_change": None, "category": "Khác", "raw_text": raw_text,
     }
 
 

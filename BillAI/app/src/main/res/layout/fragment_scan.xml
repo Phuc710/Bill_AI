@@ -1,189 +1,328 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- ScanFragment: Chọn ảnh từ gallery hoặc chụp ảnh, rồi upload -->
-<androidx.constraintlayout.widget.ConstraintLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/bg_light">
 
-    <!-- Header -->
-    <TextView
-        android:id="@+id/tvHeader"
-        style="@style/PolarisAppTitle"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Quét hóa đơn"
-        android:paddingHorizontal="24dp"
-        android:paddingTop="28dp"
-        android:paddingBottom="16dp"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"/>
-
-    <TextView
-        android:id="@+id/tvVersion"
-        style="@style/PolarisAppSubText"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Bill AI v1.0.0"
-        android:textSize="12sp"
-        android:textColor="@color/accent_indigo"
-        android:paddingHorizontal="24dp"
-        android:paddingTop="32dp"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent"/>
-
-    <!-- Upload/Preview Area (Dropzone style) -->
-    <FrameLayout
-        android:id="@+id/uploadArea"
+    <androidx.camera.view.PreviewView
+        android:id="@+id/previewView"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:layout_marginHorizontal="24dp"
-        android:layout_marginTop="8dp"
-        android:layout_marginBottom="24dp"
-        android:background="@drawable/bg_dashed_border"
-        app:layout_constraintBottom_toTopOf="@+id/cardActions"
+        app:implementationMode="performance"
+        app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/tvHeader">
+        app:layout_constraintTop_toTopOf="parent"
+        app:scaleType="fillCenter" />
 
-        <!-- Empty State Hint -->
-        <LinearLayout
-            android:id="@+id/layoutHint"
+    <View
+        android:id="@+id/viewFlash"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:alpha="0"
+        android:background="@android:color/white"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <View
+        android:id="@+id/topScrim"
+        android:layout_width="0dp"
+        android:layout_height="180dp"
+        android:background="@drawable/bg_scan_top_scrim"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <View
+        android:id="@+id/bottomScrim"
+        android:layout_width="0dp"
+        android:layout_height="260dp"
+        android:background="@drawable/bg_scan_bottom_scrim"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <com.example.myapplication.ui.scan.ScanFrameOverlayView
+        android:id="@+id/scanOverlay"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <LinearLayout
+        android:id="@+id/topBar"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="20dp"
+        android:paddingTop="@dimen/main_scan_top_bar_padding"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <ImageButton
+            android:id="@+id/btnBack"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@drawable/bg_scan_side_button"
+            android:contentDescription="@string/back"
+            android:padding="10dp"
+            android:src="@android:drawable/ic_media_previous"
+            app:tint="@color/text_main" />
+
+        <TextView
+            android:id="@+id/tvTitle"
+            style="@style/PolarisAppTitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_weight="1"
+            android:text="@string/scan_screen_title"
+            android:textColor="@color/text_main"
+            android:textSize="22sp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnFlash"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="44dp"
+            android:background="@drawable/bg_scan_pill"
+            android:minWidth="0dp"
+            android:text="@string/scan_flash"
+            android:textAllCaps="false"
+            android:textColor="@color/text_main" />
+
+        <Space
+            android:layout_width="8dp"
+            android:layout_height="1dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnHelp"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="44dp"
+            android:background="@drawable/bg_scan_pill"
+            android:minWidth="0dp"
+            android:text="@string/scan_help"
+            android:textAllCaps="false"
+            android:textColor="@color/text_main" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/layoutGuide"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:paddingHorizontal="24dp"
+        app:layout_constraintBottom_toTopOf="@+id/layoutActions"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/topBar"
+        app:layout_constraintVertical_bias="0.9">
+
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardStatus"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:layout_gravity="center"
-            android:gravity="center">
-            
-            <FrameLayout
-                android:layout_width="72dp"
-                android:layout_height="72dp"
-                android:background="@drawable/bg_card"
-                android:backgroundTint="@color/accent_indigo_soft"
-                app:cardCornerRadius="4dp"
-                android:layout_marginBottom="16dp">
-                
-                <ImageView
-                    android:layout_width="36dp"
-                    android:layout_height="36dp"
-                    android:layout_gravity="center"
-                    android:src="@android:drawable/ic_menu_camera"
-                    app:tint="@color/accent_indigo"/>
-            </FrameLayout>
-                
-            <TextView
-                style="@style/PolarisAppTitle"
+            app:cardBackgroundColor="#EAF4FF"
+            app:cardCornerRadius="999dp"
+            app:cardElevation="0dp">
+
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Dropzone"
-                android:textSize="18sp"
-                android:textColor="@color/text_main"
-                android:gravity="center"/>
-                
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="8dp">
+
+                <View
+                    android:id="@+id/viewStatusDot"
+                    android:layout_width="8dp"
+                    android:layout_height="8dp"
+                    android:background="@drawable/bg_scan_status_dot" />
+
+                <TextView
+                    android:id="@+id/tvStatus"
+                    style="@style/PolarisAppSubText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="@string/scan_status_detecting"
+                    android:textColor="@color/text_main" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <TextView
+            android:id="@+id/tvGuide"
+            style="@style/PolarisAppTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:gravity="center"
+            android:text="@string/scan_hint_default"
+            android:textColor="@android:color/white"
+            android:textSize="18sp" />
+
+        <TextView
+            android:id="@+id/tvGuideSub"
+            style="@style/PolarisAppSubText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:gravity="center"
+            android:text="@string/scan_hint_sub_default"
+            android:textColor="#DCE7FF" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/layoutActions"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:paddingHorizontal="20dp"
+        android:paddingBottom="26dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <LinearLayout
+            android:id="@+id/btnGallery"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:background="@drawable/bg_scan_side_button"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackgroundBorderless"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <ImageView
+                android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:contentDescription="@null"
+            android:src="@android:drawable/ic_menu_gallery"
+            app:tint="@color/text_main" />
+
             <TextView
-                android:id="@+id/tvHint"
                 style="@style/PolarisAppSubText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Chọn hoặc chụp ảnh sắc nét"
                 android:layout_marginTop="4dp"
-                android:gravity="center"/>
+                android:text="@string/scan_gallery"
+                android:textColor="@color/text_main"
+                android:textSize="11sp" />
         </LinearLayout>
 
-        <!-- Preview Image -->
-        <ImageView
-            android:id="@+id/ivPreview"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:scaleType="centerCrop"
-            android:background="@android:color/transparent"
-            android:contentDescription="Preview ảnh hóa đơn"
-            android:clipToOutline="true"/>
-        
-        <!-- Processing overlay (visible when uploading) -->
-        <LinearLayout
-            android:id="@+id/layoutProcessing"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:orientation="vertical"
-            android:gravity="center"
-            android:background="#DBFAFAFA"
-            android:visibility="gone">
+        <FrameLayout
+            android:id="@+id/btnCapture"
+            android:layout_width="104dp"
+            android:layout_height="104dp"
+            android:layout_marginHorizontal="28dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackgroundBorderless">
 
-            <ProgressBar
-                style="?android:attr/progressBarStyle"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:indeterminateTint="@color/accent_indigo"/>
+            <View
+                android:id="@+id/viewCaptureRing"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/bg_capture_outer" />
+
+            <View
+                android:id="@+id/viewCaptureCore"
+                android:layout_width="76dp"
+                android:layout_height="76dp"
+                android:layout_gravity="center"
+                android:background="@drawable/bg_capture_inner" />
+        </FrameLayout>
+
+        <LinearLayout
+            android:id="@+id/btnRecent"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:background="@drawable/bg_scan_side_button"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackgroundBorderless"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <ImageView
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:contentDescription="@null"
+                android:src="@android:drawable/ic_menu_recent_history"
+                app:tint="@color/text_main" />
 
             <TextView
-                android:id="@+id/tvProcessingStep"
-                style="@style/PolarisAppTitle"
+                style="@style/PolarisAppSubText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Đang xử lý..."
-                android:textColor="@color/accent_indigo"
-                android:textSize="15sp"
-                android:layout_marginTop="16dp"/>
+                android:layout_marginTop="4dp"
+                android:text="@string/scan_recent"
+                android:textColor="@color/text_main"
+                android:textSize="11sp" />
         </LinearLayout>
-    </FrameLayout>
+    </LinearLayout>
 
-    <!-- Action Card -->
     <com.google.android.material.card.MaterialCardView
-        android:id="@+id/cardActions"
-        android:layout_width="match_parent"
+        android:id="@+id/cardPermission"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginHorizontal="24dp"
-        android:layout_marginBottom="32dp"
-        app:cardCornerRadius="4dp"
-        app:cardElevation="0dp"
+        android:visibility="gone"
         app:cardBackgroundColor="@color/bg_card"
-        app:strokeWidth="1dp"
+        app:cardCornerRadius="24dp"
+        app:cardElevation="0dp"
         app:strokeColor="@color/border_card"
-        app:layout_constraintBottom_toBottomOf="parent"
+        app:strokeWidth="1dp"
+        app:layout_constraintBottom_toTopOf="@+id/layoutActions"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:gravity="center"
             android:orientation="vertical"
-            android:padding="24dp">
+            android:padding="20dp">
 
-            <!-- Gallery Button -->
-            <androidx.appcompat.widget.AppCompatButton
-                android:id="@+id/btnPickGallery"
-                style="@style/PolarisButton"
-                android:layout_width="match_parent"
-                android:layout_height="52dp"
-                android:text="Chọn từ thư viện"/>
-
-            <!-- Camera Button -->
-            <androidx.appcompat.widget.AppCompatButton
-                android:id="@+id/btnCamera"
-                android:layout_width="match_parent"
-                android:layout_height="52dp"
-                android:layout_marginTop="12dp"
-                android:text="Chụp ảnh"
-                android:background="@drawable/bg_outline_button"
+            <TextView
+                style="@style/PolarisAppTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:text="@string/scan_permission_title"
                 android:textColor="@color/text_main"
-                android:textAllCaps="false"
-                android:textStyle="bold"
-                android:letterSpacing="0.01"
-                android:textSize="15sp"/>
+                android:textSize="18sp" />
 
-            <!-- Upload Button -->
-            <androidx.appcompat.widget.AppCompatButton
-                android:id="@+id/btnUpload"
-                style="@style/PolarisButton"
+            <TextView
+                style="@style/PolarisAppSubText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:gravity="center"
+                android:text="@string/scan_permission_subtitle"
+                android:textColor="@color/text_sub" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnGrantPermission"
                 android:layout_width="match_parent"
                 android:layout_height="52dp"
-                android:layout_marginTop="12dp"
-                android:backgroundTint="@color/accent_indigo"
-                android:text="✅  Xử lý hóa đơn"
-                android:visibility="gone"/>
-
+                android:layout_marginTop="18dp"
+                android:text="@string/scan_permission_button"
+                android:textAllCaps="false"
+                app:backgroundTint="@color/accent_mint"
+                app:cornerRadius="18dp" />
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 

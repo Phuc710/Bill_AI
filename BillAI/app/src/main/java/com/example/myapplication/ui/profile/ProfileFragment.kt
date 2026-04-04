@@ -7,71 +7,71 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
+import com.example.myapplication.R
 import com.example.myapplication.data.repository.AuthRepository
 import com.example.myapplication.data.repository.BillRepository
 import com.example.myapplication.databinding.FragmentProfileBinding
 import com.example.myapplication.ui.auth.LoginActivity
+import com.example.myapplication.util.toCurrencyText
 import kotlinx.coroutines.launch
-import java.text.NumberFormat
-import java.util.Locale
 
-/**
- * ProfileFragment — thông tin tài khoản, thống kê, đăng xuất.
- */
 class ProfileFragment : Fragment() {
 
     private var _binding: FragmentProfileBinding? = null
     private val binding get() = _binding!!
 
-    private val authRepo = AuthRepository()
-    private val billRepo = BillRepository()
+    private val authRepository = AuthRepository()
+    private val billRepository = BillRepository()
 
-    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View {
         _binding = FragmentProfileBinding.inflate(inflater, container, false)
         return binding.root
     }
 
+    override fun onResume() {
+        super.onResume()
+        loadProfile()
+    }
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
-        loadUserInfo()
-
         binding.btnLogout.setOnClickListener {
             lifecycleScope.launch {
-                authRepo.logout()
-                // Navigate back to Login, clear backstack
-                val intent = Intent(requireContext(), LoginActivity::class.java)
-                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                startActivity(intent)
+                authRepository.logout()
+                startActivity(
+                    Intent(requireContext(), LoginActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                    }
+                )
             }
         }
     }
 
-    private fun loadUserInfo() {
+    private fun loadProfile() {
         lifecycleScope.launch {
-            val email = authRepo.getUserEmail() ?: "Không rõ"
-            val userId = authRepo.getUserId() ?: return@launch
+            binding.tvUserEmail.text = authRepository.getUserEmail() ?: getString(R.string.profile_email_empty)
 
-            binding.tvUserEmail.text = email
-
-            // Load bill stats
-            billRepo.listBills(userId, page = 1, limit = 100).fold(
+            val userId = authRepository.getUserId() ?: return@launch
+            billRepository.listBills(userId, page = 1, limit = 100).fold(
                 onSuccess = { response ->
                     val bills = response.data
-                    val total = bills.sumOf { it.total ?: 0L }
                     binding.tvTotalBills.text = bills.size.toString()
-                    binding.tvTotalAmount.text = formatCurrency(total)
+                    binding.tvTotalAmount.text = bills.sumOf { it.total ?: 0L }.toCurrencyText()
+                    binding.tvSyncStatus.text = getString(R.string.profile_sync_ok)
+                    binding.tvReviewInfo.text = getString(R.string.profile_review_count, bills.count { it.needs_review })
                 },
                 onFailure = {
-                    binding.tvTotalBills.text = "—"
-                    binding.tvTotalAmount.text = "—"
+                    binding.tvTotalBills.text = "0"
+                    binding.tvTotalAmount.text = 0L.toCurrencyText()
+                    binding.tvSyncStatus.text = getString(R.string.profile_sync_failed)
+                    binding.tvReviewInfo.text = getString(R.string.profile_retry_later)
                 }
             )
         }
-    }
-
-    private fun formatCurrency(amount: Long): String {
-        return NumberFormat.getNumberInstance(Locale.forLanguageTag("vi-VN")).format(amount) + "đ"
     }
 
     override fun onDestroyView() {

@@ -14,7 +14,7 @@
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:paddingHorizontal="24dp"
-        android:paddingTop="28dp"
+        android:paddingTop="@dimen/main_page_top_padding"
         android:paddingBottom="16dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -25,14 +25,14 @@
             style="@style/PolarisAppTitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Dashboard"/>
+            android:text="@string/bills_title"/>
             
         <TextView
             style="@style/PolarisAppSubText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:text="Quản lý lịch sử quét hóa đơn"/>
+            android:text="@string/bills_subtitle"/>
     </LinearLayout>
     <!-- Divider -->
     <View
@@ -89,7 +89,7 @@
             style="@style/PolarisAppTitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Trống rỗng!"
+            android:text="@string/bills_empty_title"
             android:textSize="18sp"/>
             
         <TextView
@@ -97,7 +97,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="Chưa có hóa đơn nào, hãy tiếp tục quét nha"
+            android:text="@string/bills_empty_subtitle"
             android:gravity="center"/>
     </LinearLayout>
     <!-- Bill List -->

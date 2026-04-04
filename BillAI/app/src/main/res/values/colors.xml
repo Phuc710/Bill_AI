@@ -1,26 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Modern SaaS FinTech Palette -->
-    <color name="bg_light">#F8FAFC</color> <!-- Slate 50: clean ultra light background -->
+    <color name="bg_light">#F8FAFC</color>
     <color name="bg_card">#FFFFFF</color>
-
-    <color name="primary_button">#0F172A</color> <!-- Slate 900 -->
+    <color name="primary_button">#0F172A</color>
     <color name="primary_button_text">#FFFFFF</color>
-    
-    <color name="accent_indigo">#4F46E5</color> <!-- Indigo 600 -->
-    <color name="accent_indigo_soft">#EEF2FF</color> <!-- Indigo 50 -->
+    <color name="accent_indigo">#4F46E5</color>
+    <color name="accent_indigo_soft">#EEF2FF</color>
+    <color name="accent_sky">#0F62FE</color>
+    <color name="accent_sky_soft">#EAF2FF</color>
+    <color name="accent_mint">#14C8A8</color>
+    <color name="accent_mint_soft">#E8FFFA</color>
     <color name="secondary_green">#10B981</color>
     <color name="error_red">#EF4444</color>
     <color name="error_red_soft">#FEF2F2</color>
-
+    <color name="warning_bg">#FFF4D6</color>
+    <color name="warning_text">#8A5800</color>
     <color name="text_main">#0F172A</color>
-    <color name="text_sub">#64748B</color> <!-- Slate 500 -->
-    <color name="divider">#F1F5F9</color> <!-- Slate 100 -->
-    <color name="border_card">#E2E8F0</color> <!-- Slate 200 -->
-
+    <color name="text_sub">#64748B</color>
+    <color name="divider">#F1F5F9</color>
+    <color name="border_card">#E2E8F0</color>
     <color name="icon_bg">#FFFFFF</color>
-
-    <!-- Material Design specific colors -->
+    <color name="scan_surface">#F7FBFF</color>
+    <color name="scan_surface_soft">#F4F9FF</color>
+    <color name="scan_surface_border">#D8E7FF</color>
     <color name="colorPrimary">#0F172A</color>
     <color name="colorPrimaryVariant">#020617</color>
     <color name="colorOnPrimary">#FFFFFF</color>

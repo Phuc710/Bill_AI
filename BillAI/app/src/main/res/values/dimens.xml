@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="main_page_top_padding">40dp</dimen>
+    <dimen name="main_scan_top_bar_padding">28dp</dimen>
+
+    <dimen name="main_bottom_bar_height">96dp</dimen>
+    <dimen name="main_bottom_bar_horizontal_margin">16dp</dimen>
+    <dimen name="main_bottom_bar_margin_bottom">16dp</dimen>
+    <dimen name="main_bottom_bar_horizontal_padding">16dp</dimen>
+    <dimen name="main_bottom_bar_top_padding">18dp</dimen>
+    <dimen name="main_bottom_bar_bottom_padding">14dp</dimen>
+    <dimen name="main_bottom_bar_center_gap">104dp</dimen>
+    <dimen name="main_bottom_bar_elevation">16dp</dimen>
+    <dimen name="main_bottom_bar_corner_radius">34dp</dimen>
+    <dimen name="main_bottom_bar_dock_offset">26dp</dimen>
+
+    <dimen name="main_nav_item_touch_height">64dp</dimen>
+    <dimen name="main_nav_icon_container_size">42dp</dimen>
+    <dimen name="main_nav_icon_size">20dp</dimen>
+
+    <dimen name="main_scan_fab_size">80dp</dimen>
+    <dimen name="main_scan_fab_corner_radius">29dp</dimen>
+    <dimen name="main_scan_fab_elevation">20dp</dimen>
+    <dimen name="main_scan_icon_size">36dp</dimen>
+</resources>

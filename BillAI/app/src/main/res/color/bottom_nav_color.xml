@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Bottom nav icon/text color: accent_indigo when selected, text_sub when not -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:color="@color/accent_indigo" android:state_checked="true" />
+    <item android:color="@color/accent_sky" android:state_checked="true" />
     <item android:color="@color/text_sub" />
 </selector>

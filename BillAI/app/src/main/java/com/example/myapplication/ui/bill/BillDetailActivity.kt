@@ -1,28 +1,26 @@
 package com.example.myapplication.ui.bill
 
+import android.content.Intent
 import android.os.Bundle
-import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.bumptech.glide.Glide
+import com.example.myapplication.R
 import com.example.myapplication.data.model.BillResponse
 import com.example.myapplication.data.repository.BillRepository
 import com.example.myapplication.databinding.ActivityBillDetailBinding
+import com.example.myapplication.util.toCurrencyText
+import com.example.myapplication.util.toDisplayDateTime
 import kotlinx.coroutines.launch
-import java.text.NumberFormat
-import java.util.Locale
 
 class BillDetailActivity : AppCompatActivity() {
 
-    companion object {
-        const val EXTRA_BILL_ID = "extra_bill_id"
-    }
-
     private lateinit var binding: ActivityBillDetailBinding
-    private val billRepo = BillRepository()
+    private val billRepository = BillRepository()
     private lateinit var itemsAdapter: BillItemsAdapter
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -37,24 +35,28 @@ class BillDetailActivity : AppCompatActivity() {
             return
         }
 
-        setupUI()
-        loadBillDetail(billId)
-    }
-
-    private fun setupUI() {
-        binding.btnBack.setOnClickListener { finish() }
-
         itemsAdapter = BillItemsAdapter()
         binding.rvItems.layoutManager = LinearLayoutManager(this)
         binding.rvItems.adapter = itemsAdapter
+
+        binding.btnBack.setOnClickListener { finish() }
+        binding.btnDelete.setOnClickListener { confirmDelete(billId) }
+        binding.btnShare.setOnClickListener { shareBill() }
+
+        loadBillDetail(billId)
     }
 
     private fun loadBillDetail(billId: String) {
         lifecycleScope.launch {
-            billRepo.getBillDetail(billId).fold(
-                onSuccess = { bill -> renderBill(bill) },
+            binding.progressDetail.isVisible = true
+            billRepository.getBillDetail(billId).fold(
+                onSuccess = {
+                    binding.progressDetail.isVisible = false
+                    renderBill(it)
+                },
                 onFailure = {
-                    Toast.makeText(this@BillDetailActivity, "Không thể tải hóa đơn", Toast.LENGTH_SHORT).show()
+                    binding.progressDetail.isVisible = false
+                    Toast.makeText(this@BillDetailActivity, getString(R.string.detail_load_failed), Toast.LENGTH_SHORT).show()
                     finish()
                 }
             )
@@ -62,61 +64,66 @@ class BillDetailActivity : AppCompatActivity() {
     }
 
     private fun renderBill(bill: BillResponse) {
-        val data = bill.data
+        binding.tvNeedsReview.isVisible = bill.meta?.needs_review == true || bill.status.equals("failed", true)
+        binding.tvNeedsReview.text = bill.message ?: getString(R.string.detail_review_fallback)
 
-        if (!bill.cropped_image_url.isNullOrBlank()) {
-            Glide.with(this).load(bill.cropped_image_url).centerCrop().into(binding.ivCroppedImage)
-        }
+        Glide.with(this)
+            .load(bill.cropped_image_url ?: bill.original_image_url)
+            .centerCrop()
+            .into(binding.ivCroppedImage)
 
-        if (bill.meta?.needs_review == true || bill.status == "failed") {
-            binding.tvNeedsReview.visibility = View.VISIBLE
-        }
+        binding.tvStoreName.text = bill.data?.store_name ?: getString(R.string.detail_store_fallback)
+        binding.tvAddress.text = bill.data?.address ?: getString(R.string.detail_address_empty)
+        binding.tvPhone.text = bill.data?.phone ?: getString(R.string.detail_phone_empty)
+        binding.tvDatetime.text = bill.data?.datetime.toDisplayDateTime()
+        binding.tvInvoiceId.text = bill.data?.invoice_id ?: getString(R.string.detail_invoice_empty)
+        binding.tvPayment.text = bill.data?.payment_method ?: getString(R.string.detail_unknown)
+        binding.tvSubtotal.text = bill.data?.subtotal.toCurrencyText()
+        binding.tvTotal.text = bill.data?.total.toCurrencyText()
+        binding.tvCashGiven.text = bill.data?.cash_given.toCurrencyText()
+        binding.tvCashChange.text = bill.data?.cash_change.toCurrencyText()
+        binding.tvMeta.text = getString(R.string.detail_status_format, bill.status)
 
-        binding.tvStoreName.text = data?.store_name ?: "Không rõ cửa hàng"
-        binding.tvAddress.text = data?.address ?: ""
-        binding.tvPhone.text = data?.phone ?: ""
-        binding.tvAddress.visibility = if (data?.address.isNullOrBlank()) View.GONE else View.VISIBLE
-        binding.tvPhone.visibility = if (data?.phone.isNullOrBlank()) View.GONE else View.VISIBLE
+        itemsAdapter.submitList(bill.items.orEmpty())
+    }
 
-        binding.tvDatetime.text = formatDate(data?.datetime ?: "")
-        binding.tvInvoiceId.text = data?.invoice_id ?: "—"
+    private fun shareBill() {
+        val summary = listOf(
+            binding.tvStoreName.text.toString(),
+            binding.tvDatetime.text.toString(),
+            binding.tvTotal.text.toString()
+        ).joinToString("\n")
 
-        itemsAdapter.submitList(bill.items ?: emptyList())
-
-        binding.tvTotal.text = formatCurrency(data?.total ?: 0)
-        binding.tvCashGiven.text = data?.cash_given?.let { formatCurrency(it) } ?: "—"
-        binding.tvCashChange.text = data?.cash_change?.let { formatCurrency(it) } ?: "—"
-        binding.tvPayment.text = data?.payment_method ?: "—"
-
-        binding.btnDelete.setOnClickListener {
-            confirmDelete(bill.bill_id)
-        }
+        startActivity(
+            Intent.createChooser(
+                Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, summary)
+                },
+                getString(R.string.detail_share_title)
+            )
+        )
     }
 
     private fun confirmDelete(billId: String) {
         AlertDialog.Builder(this)
-            .setTitle("Xóa hóa đơn")
-            .setMessage("Bạn có chắc muốn xóa hóa đơn này?")
-            .setPositiveButton("Xóa") { _, _ ->
+            .setTitle(R.string.detail_delete_title)
+            .setMessage(R.string.detail_delete_message)
+            .setPositiveButton(R.string.detail_delete_confirm) { _, _ ->
                 lifecycleScope.launch {
-                    billRepo.deleteBill(billId).fold(
+                    billRepository.deleteBill(billId).fold(
                         onSuccess = { finish() },
-                        onFailure = { Toast.makeText(this@BillDetailActivity, "Xóa thất bại", Toast.LENGTH_SHORT).show() }
+                        onFailure = {
+                            Toast.makeText(this@BillDetailActivity, getString(R.string.detail_delete_failed), Toast.LENGTH_SHORT).show()
+                        }
                     )
                 }
             }
-            .setNegativeButton("Hủy", null)
+            .setNegativeButton(R.string.detail_delete_cancel, null)
             .show()
     }
 
-    private fun formatDate(isoDate: String): String {
-        return try {
-            val parts = isoDate.substringBefore("T").split("-")
-            "${parts[2]}/${parts[1]}/${parts[0]}"
-        } catch (e: Exception) { isoDate }
-    }
-
-    private fun formatCurrency(amount: Long): String {
-        return NumberFormat.getNumberInstance(Locale.forLanguageTag("vi-VN")).format(amount) + "đ"
+    companion object {
+        const val EXTRA_BILL_ID = "extra_bill_id"
     }
 }

@@ -217,6 +217,7 @@ class InvoicePipeline:
                 "cash_given":     structured.get("cash_given"),
                 "cash_change":    structured.get("cash_change"),
                 "payment_method": structured.get("payment_method"),
+                "category":       structured.get("category", "Khác"),
                 "currency":       "VND",
             },
             "items": items,
