@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical"
+    android:minHeight="60dp"
+    android:orientation="horizontal"
+    android:paddingVertical="8dp">
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/tvItemName"
+            style="@style/PolarisAppTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:maxLines="2"
+            android:text="@string/placeholder_item_name"
+            android:textColor="@color/text_main"
+            android:textSize="15sp" />
+
+        <TextView
+            android:id="@+id/tvItemMeta"
+            style="@style/PolarisAppSubText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="@string/bill_item_meta_format" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/tvItemTotal"
+        style="@style/PolarisAppTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:gravity="end"
+        android:text="@string/placeholder_amount"
+        android:textSize="15sp" />
+
+</LinearLayout>

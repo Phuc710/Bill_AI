@@ -1,11 +1,15 @@
 """
-Invoice Pipeline — Production Flow.
+Invoice Pipeline — Production Flow (Clean).
 
-  Upload → Detect (YOLO) → Crop → OCR (VnCV) → Groq Llama 3.3 70B → Save to Supabase
+Upload → OCR (VnCV, standard→aggressive fallback)
+       → Normalize (Groq Llama 3.3 70B)
+       → Validate (math check)
+       → Save (Supabase invoices + invoice_items)
+       → Respond (1 schema duy nhất cho app)
 
 DB status transitions:
-  uploaded → detecting → cropping → ocr_done → normalizing → completed
-                                                            → failed
+  uploaded → ocr_done → normalizing → completed
+                                    → failed
 """
 from __future__ import annotations
 
@@ -13,7 +17,7 @@ import io
 import logging
 import time
 import traceback
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import cv2
 import numpy as np
@@ -22,7 +26,8 @@ from PIL import Image, ImageOps
 from core.config import Config
 from core.database import DatabaseService
 from core.groq_extractor import GroqExtractor
-from core.ocr import OCREngine, OCRTextResult
+from core.mapper import failed_api_response, internal_to_api_response, internal_to_db
+from core.ocr import extract_text as ocr_extract_text
 from core.storage import StorageService
 
 log = logging.getLogger("billai.pipeline")
@@ -30,227 +35,173 @@ log = logging.getLogger("billai.pipeline")
 
 class InvoicePipeline:
     def __init__(self) -> None:
-        self._ocr          = OCREngine()
-        self._extractor    = GroqExtractor()
+        self._extractor = GroqExtractor()
 
-    # ── Main entry ────────────────────────────────────────────────────────
+    # ── Main entry ────────────────────────────────────────────────────────────
 
-    def run(
+    async def run(
         self,
         image_bytes: bytes,
         filename: str,
         user_id: str,
         bill_id: str,
     ) -> Dict[str, Any]:
+        import asyncio
         t0 = time.perf_counter()
         log.info(f"[{bill_id}] Pipeline START | file={filename} user={user_id}")
 
+        # ── DB: tạo row ban đầu ───────────────────────────────────────────────
         try:
-            DatabaseService.create_invoice(bill_id, user_id)
+            await asyncio.to_thread(DatabaseService.create_invoice, bill_id, user_id)
         except Exception as exc:
-            log.error(f"[{bill_id}] DB create failed, aborting: {exc}")
-            return self._error_response(bill_id, "DB error", "db_init")
+            log.error(f"[{bill_id}] DB create failed: {exc}")
+            return failed_api_response(bill_id, "db_init", "DB error", t0=t0)
 
         orig_url: Optional[str] = None
-        crop_url: Optional[str] = None
 
         try:
-            # ── Step 1: Load & validate ────────────────────────────────────
-            image, gray = self._load(image_bytes, filename)
-            blur = float(cv2.Laplacian(gray, cv2.CV_64F).var())
+            # ── Step 1: Load & validate image ─────────────────────────────────
+            image = await asyncio.to_thread(self._load, image_bytes, filename)
 
-            # ── Step 2: Upload original to Storage ─────────────────────────
-            DatabaseService.update_status(bill_id, "detecting")
-            orig_url = StorageService.upload_image(image, bill_id, "Original")
-            log.info(f"[{bill_id}] Original uploaded: {orig_url}")
+            # ── Step 2 & 3: Upload & OCR song song (Parallel) ─────────────────
+            async def _upload_task():
+                await asyncio.to_thread(DatabaseService.update_status, bill_id, "detecting")
+                return await asyncio.to_thread(StorageService.upload_image, image, bill_id, "Original")
 
-            # ── Step 3: OCR Full Image (VnCV) ──────────────────────────────
-            DatabaseService.update_status(bill_id, "ocr_done")
-            ocr = self._ocr.extract_text(image)
-            
-            # Quét chữ OCR rồi lưu trạng thái nếu có
-            DatabaseService.update_status(
+            async def _ocr_task():
+                # We do not set status to OCR done at the start of OCR task, we do it after.
+                t_ocr = time.perf_counter()
+                res = await asyncio.to_thread(ocr_extract_text, image)
+                return res, (time.perf_counter() - t_ocr) * 1000
+
+            log.info(f"[{bill_id}] Starting Upload & OCR concurrently")
+            upload_task = asyncio.create_task(_upload_task())
+            ocr_task = asyncio.create_task(_ocr_task())
+
+            orig_url, (ocr, ocr_ms) = await asyncio.gather(upload_task, ocr_task)
+            log.info(f"[{bill_id}] Uploaded original: {orig_url}")
+
+            if ocr.error_type:
+                log.warning(
+                    f"[{bill_id}] OCR error | type={ocr.error_type} | {ocr.error_message}"
+                )
+
+            await asyncio.to_thread(
+                DatabaseService.update_status,
                 bill_id, "ocr_done",
                 ocr_raw_text=ocr.text_raw or "",
             )
             log.info(
-                f"[{bill_id}] OCR Full done | chars={len(ocr.text_raw or '')} "
-                f"conf={ocr.confidence_avg:.3f}"
+                f"[{bill_id}] OCR done | mode={ocr.preprocess_mode} | "
+                f"chars={len(ocr.text_raw or '')} | conf={ocr.confidence_avg:.3f} | "
+                f"time={ocr_ms:.0f}ms"
             )
 
-            # ── Guard Clause: Không thấy chữ ───────────────────────────────
+            # Guard: không quét được chữ nào
             if not (ocr.text_raw or "").strip():
-                DatabaseService.mark_failed(bill_id, "ocr", "Không tìm thấy hóa đơn (None Text Detected)")
-                log.warning(f"[{bill_id}] OCR empty — returning NOT FOUND status")
-                return self._ocr_empty_response(bill_id, orig_url, t0)
+                await asyncio.to_thread(DatabaseService.mark_failed, bill_id, "ocr", "Không tìm thấy văn bản trên ảnh")
+                log.warning(f"[{bill_id}] OCR empty — pipeline failed")
+                return failed_api_response(
+                    bill_id, "ocr",
+                    "Không tìm thấy hóa đơn (None Text Detected)",
+                    orig_url, t0,
+                )
 
-            # ── Step 6: Groq Llama 3.3 70B ─────────────────────────────────────
-            DatabaseService.update_status(bill_id, "normalizing")
-            extraction = self._extractor.extract(ocr_text=ocr.text_raw)
+            # ── Step 4: Groq Llama 3.3 70B Normalize ─────────────────────────
+            await asyncio.to_thread(DatabaseService.update_status, bill_id, "normalizing")
+            t_llm = time.perf_counter()
+            extraction = await asyncio.to_thread(self._extractor.extract, ocr_text=ocr.text_raw)
+            llm_ms = (time.perf_counter() - t_llm) * 1000
+
+            internal    = extraction.get("internal") or {}
             raw_response = extraction.get("raw_response", "")
-            error_type = extraction.get("error_type")
+            error_type   = extraction.get("error_type")
+            math_warnings = internal.pop("_math_warnings", None)
+
             log.info(
-                f"[{bill_id}] Groq done | error_type={error_type} | "
-                f"raw_len={len(raw_response)}"
+                f"[{bill_id}] LLM done | error={error_type} | "
+                f"total={internal.get('total')} | time={llm_ms:.0f}ms"
             )
 
-            # ── Step 7: Persist to Supabase DB ─────────────────────────────
-            structured = extraction.get("structured") or {}
-            items: List[Dict[str, Any]] = structured.get("items") or []
+            # ── Step 5: Validate & map ────────────────────────────────────────
             processing_ms = (time.perf_counter() - t0) * 1000
-            needs_review = self._needs_review(structured, ocr.confidence_avg, error_type)
+            needs_review  = self._needs_review(
+                internal, ocr.confidence_avg, error_type, math_warnings
+            )
 
-            DatabaseService.save_result(
-                invoice_id=bill_id,
-                structured=structured,
-                items=items,
-                ocr_raw_text=ocr.text_raw or "",
-                llm_raw=raw_response,
-                orig_url=orig_url,
-                crop_url=orig_url,  # Giữ cho db/frontend ko bị lỗi khuyết cột
-                detect_confidence=1.0, # Mặc định 1.0 vì bỏ detector
-                ocr_confidence=ocr.confidence_avg,
-                processing_ms=processing_ms,
-                needs_review=needs_review,
+            # ── Step 6: Save to Supabase ──────────────────────────────────────
+            items: List[Dict[str, Any]] = internal.get("items") or []
+            db_payload = internal_to_db(internal)
+
+            await asyncio.to_thread(
+                DatabaseService.save_result,
+                invoice_id      = bill_id,
+                db_payload      = db_payload,
+                items           = items,
+                ocr_raw_text    = ocr.text_raw or "",
+                llm_raw         = raw_response,
+                orig_url        = orig_url,
+                ocr_confidence  = ocr.confidence_avg,
+                processing_ms   = processing_ms,
+                needs_review    = needs_review,
             )
             log.info(
-                f"[{bill_id}] COMPLETED | store={structured.get('store_name')} "
-                f"total={structured.get('total')} ms={processing_ms:.0f}"
+                f"[{bill_id}] COMPLETED | store={internal.get('store_name')} | "
+                f"total={internal.get('total')} | "
+                f"ocr={ocr_ms:.0f}ms | llm={llm_ms:.0f}ms | total={processing_ms:.0f}ms"
             )
 
-            return self._success_response(
-                bill_id=bill_id,
-                structured=structured,
-                items=items,
-                orig_url=orig_url,
-                processing_ms=processing_ms,
-                needs_review=needs_review,
-                llm_error=error_type,
+            # ── Step 7: Return clean API response ────────────────────────────
+            return internal_to_api_response(
+                internal      = internal,
+                bill_id       = bill_id,
+                orig_url      = orig_url,
+                ocr_error     = ocr.error_type,
+                llm_error     = error_type,
+                processing_ms = processing_ms,
+                needs_review  = needs_review,
             )
 
         except Exception as exc:
             stack = traceback.format_exc(limit=5)
             log.error(f"[{bill_id}] UNCAUGHT: {exc}\n{stack}")
-            DatabaseService.mark_failed(bill_id, "unknown", str(exc)[:400])
-            return self._error_response(bill_id, str(exc), "unknown", t0)
+            try:
+                await asyncio.to_thread(DatabaseService.mark_failed, bill_id, "unknown", str(exc)[:400])
+            except Exception:
+                pass
+            return failed_api_response(bill_id, "unknown", str(exc)[:200], orig_url, t0)
 
-    # ── Helpers ───────────────────────────────────────────────────────────
+    # ── Helpers ───────────────────────────────────────────────────────────────
 
-    def _load(self, image_bytes: bytes, filename: str) -> Tuple[Image.Image, np.ndarray]:
+    def _load(self, image_bytes: bytes, filename: str) -> Image.Image:
         img = Image.open(io.BytesIO(image_bytes))
         img = ImageOps.exif_transpose(img).convert("RGB")
         w, h = img.size
         if max(w, h) > Config.MAX_INPUT_SIDE:
             s   = Config.MAX_INPUT_SIDE / max(w, h)
             img = img.resize((int(w * s), int(h * s)), Image.Resampling.LANCZOS)
-        gray = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2GRAY)
-        return img, gray
-
-
+        return img
 
     @staticmethod
     def _needs_review(
-        structured: Dict[str, Any],
+        internal: Dict[str, Any],
         ocr_conf: float,
         llm_error: Optional[str],
+        math_warnings: Optional[List[str]] = None,
     ) -> bool:
+        """
+        Flag needs_review = True khi:
+          - LLM gặp lỗi (quota, empty, v.v.)
+          - OCR confidence quá thấp
+          - Tổng tiền = 0 (không trích được total)
+          - Có cảnh báo số học (qty × unit_price ≠ amount)
+        """
         if llm_error:
             return True
         if ocr_conf < Config.OCR_MIN_CONF:
             return True
-        if int(structured.get("total") or 0) <= 0:
+        if int(internal.get("total") or 0) <= 0:
+            return True
+        if math_warnings:
             return True
         return False
-
-    # ── Response builders ─────────────────────────────────────────────────
-
-    @staticmethod
-    def _success_response(
-        bill_id: str,
-        structured: Dict[str, Any],
-        items: List[Dict[str, Any]],
-        orig_url: Optional[str],
-        processing_ms: float,
-        needs_review: bool,
-        llm_error: Optional[str],
-    ) -> Dict[str, Any]:
-        return {
-            "bill_id": bill_id,
-            "status": "completed",
-            "original_image_url": orig_url,
-            "cropped_image_url": orig_url,
-            "data": {
-                "store_name":     structured.get("store_name"),
-                "address":        structured.get("address"),
-                "phone":          structured.get("phone"),
-                "invoice_id":     structured.get("invoice_id"),
-                "datetime":       structured.get("datetime_in"),
-                "total":          int(structured.get("total") or 0),
-                "subtotal":       structured.get("subtotal"),
-                "cash_given":     structured.get("cash_given"),
-                "cash_change":    structured.get("cash_change"),
-                "payment_method": structured.get("payment_method"),
-                "category":       structured.get("category", "Khác"),
-                "currency":       "VND",
-            },
-            "items": items,
-            "meta": {
-                "needs_review":       needs_review,
-                "detect_confidence":  1.0,
-                "processing_ms":      round(processing_ms, 1),
-                "llm_error":          llm_error,
-            },
-        }
-
-    @staticmethod
-    def _not_found_response(
-        bill_id: str, orig_url: Optional[str], t0: float
-    ) -> Dict[str, Any]:
-        return {
-            "bill_id": bill_id,
-            "status": "failed",
-            "failed_step": "detect",
-            "message": "Không phát hiện Bill trong ảnh",
-            "original_image_url": orig_url,
-            "cropped_image_url": None,
-            "data": None,
-            "items": [],
-            "meta": {"processing_ms": round((time.perf_counter() - t0) * 1000, 1)},
-        }
-
-    @staticmethod
-    def _ocr_empty_response(
-        bill_id: str,
-        orig_url: Optional[str],
-        t0: float,
-    ) -> Dict[str, Any]:
-        return {
-            "bill_id": bill_id,
-            "status": "failed",
-            "failed_step": "ocr",
-            "message": "Không tìm thấy hóa đơn (None Text Detected)",
-            "original_image_url": orig_url,
-            "cropped_image_url": orig_url,
-            "data": None,
-            "items": [],
-            "meta": {
-                "detect_confidence": 1.0,
-                "processing_ms": round((time.perf_counter() - t0) * 1000, 1),
-            },
-        }
-
-    @staticmethod
-    def _error_response(
-        bill_id: str, message: str, step: str, t0: float = 0.0
-    ) -> Dict[str, Any]:
-        return {
-            "bill_id": bill_id,
-            "status": "failed",
-            "failed_step": step,
-            "message": message,
-            "original_image_url": None,
-            "cropped_image_url": None,
-            "data": None,
-            "items": [],
-            "meta": {"processing_ms": round((time.perf_counter() - t0) * 1000, 1) if t0 else 0},
-        }

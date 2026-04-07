@@ -1,0 +1,6 @@
+<resources>
+    <style name="Theme.MyApplication.Splash" parent="Theme.MyApplication">
+        <item name="android:windowSplashScreenBackground">@color/bg_light</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@android:color/transparent</item>
+    </style>
+</resources>

@@ -110,10 +110,11 @@ log = logging.getLogger("billai.main")
 async def lifespan(app: FastAPI):
     log.info("=" * 60)
     log.info("Bill AI Backend starting up")
-    log.info(f"  Groq model    : {Config.GROQ_MODEL}")
-    log.info(f"  Supabase URL  : {Config.SUPABASE_URL or '(not set)'}")
-    log.info(f"  Bucket        : {Config.SUPABASE_BUCKET}")
-    log.info(f"  API Key set   : {'YES' if Config.API_SECRET_KEY else 'NO — SERVER INSECURE'}")
+    log.info(f"  Groq model      : {Config.GROQ_MODEL}")
+    log.info(f"  Supabase URL    : {Config.SUPABASE_URL or '(not set)'}")
+    log.info(f"  Bucket          : {Config.SUPABASE_BUCKET}")
+    log.info(f"  OCR min conf    : {Config.OCR_MIN_CONF}")
+    log.info(f"  API Key set     : {'YES' if Config.API_SECRET_KEY else 'NO — SERVER INSECURE'}")
     log.info("=" * 60)
     yield
     log.info("Bill AI Backend shutting down")
@@ -127,12 +128,19 @@ app = FastAPI(
 Hệ thống trích xuất hóa đơn thông minh dành cho Android client.
 
 ### Pipeline
-`Upload → Detect (YOLO) → Crop → OCR (VnCV) → Normalize (Groq) → Supabase`
+`Upload → OCR (VnCV offline, standard/aggressive) → Normalize (Groq Llama 3.3 70B) → Supabase`
+
+### AI Engine
+- **OCR**: VnCV — nhận dạng chữ Việt 100% offline, không cần internet
+- **LLM**: Groq Llama 3.3 70B — phân tích và chuẩn hóa JSON tốc độ cao (LPU inference)
 
 ### Authentication
 Mọi request phải có header: `X-API-Key: <secret>`
+
+### user_id
+Phải là UUID hợp lệ từ Supabase Auth (ví dụ: `550e8400-e29b-41d4-a716-446655440000`).
 """,
-    version="1.0.0",
+    version="2.0.0",
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",

@@ -1,5 +1,13 @@
 """
-Per-request pipeline logging and timing.
+Per-request pipeline logger and timing tracker.
+
+Dùng để ghi log JSON chi tiết cho từng request (debugging, monitoring).
+File log lưu tại: logs/{request_id}.json
+
+Timing fields:
+  ocr_ms     : thời gian OCR (ms)
+  llm_ms     : thời gian Groq LLM (ms)
+  total_ms   : tổng thời gian toàn bộ pipeline (ms)
 """
 from __future__ import annotations
 
@@ -8,7 +16,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from core.config import Config
 
@@ -30,31 +38,23 @@ class PipelineTracker:
         self._steps: Dict[str, float] = {}
 
         self._log: Dict[str, Any] = {
-            "request_id": self.request_id,
-            "user_id": user_id or "",
-            "metadata": metadata or {},
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "status": "running",
-            "message": "",
-            "timing_ms": {},
-            "orig_image": None,
-            "detector_image": None,
-            "proc_image": None,
-            "detector_bbox": None,
-            "detector_confidence": None,
-            "detector_source": None,
-            "bill_count": 0,
-            "ocr_raw_text": "",
-            "ocr_confidence_avg": 0.0,
-            "llm_raw": "",
-            "result": None,
-            "structured": None,
-            "validation": {},
-            "raw": None,
-            "meta": None,
-            "error": None,
-            "input": {},
-            "precheck": {},
+            "request_id":       self.request_id,
+            "user_id":          user_id or "",
+            "metadata":         metadata or {},
+            "timestamp":        datetime.now(timezone.utc).isoformat(),
+            "status":           "running",
+            "message":          "",
+            "timing_ms": {
+                "ocr_ms":   0,
+                "llm_ms":   0,
+                "total_ms": 0,
+            },
+            "ocr_raw_text":         "",
+            "ocr_confidence_avg":   0.0,
+            "ocr_preprocess_mode":  "standard",
+            "llm_raw":              "",
+            "result":               None,
+            "error":                None,
         }
 
     def start_step(self, name: str) -> None:
@@ -65,54 +65,21 @@ class PipelineTracker:
         self._log["timing_ms"][name] = round(elapsed_ms, 1)
         return elapsed_ms
 
-    def set_input(self, payload: Dict[str, Any]) -> None:
-        self._log["input"] = payload
-
-    def set_precheck(self, payload: Dict[str, Any]) -> None:
-        self._log["precheck"] = payload
-
-    def set_orig_image(self, url: Optional[str]) -> None:
-        self._log["orig_image"] = url
-
-    def set_detect_image(self, url: Optional[str]) -> None:
-        self._log["detector_image"] = url
-
-    def set_proc_image(self, url: Optional[str]) -> None:
-        self._log["proc_image"] = url
-
-    def set_detection(
+    def set_ocr(
         self,
-        bbox: Optional[List[int]],
-        confidence: Optional[float],
-        bill_count: int,
-        source: Optional[str] = None,
+        raw_text: str,
+        confidence_avg: float,
+        preprocess_mode: str = "standard",
     ) -> None:
-        self._log["detector_bbox"] = bbox
-        self._log["detector_confidence"] = confidence
-        self._log["detector_source"] = source
-        self._log["bill_count"] = bill_count
-
-    def set_ocr(self, raw_text: str, confidence_avg: float) -> None:
-        self._log["ocr_raw_text"] = raw_text
-        self._log["ocr_confidence_avg"] = round(float(confidence_avg), 4)
+        self._log["ocr_raw_text"]        = raw_text
+        self._log["ocr_confidence_avg"]  = round(float(confidence_avg), 4)
+        self._log["ocr_preprocess_mode"] = preprocess_mode
 
     def set_llm(self, raw_response: str) -> None:
         self._log["llm_raw"] = raw_response
 
-    def set_result(
-        self,
-        legacy_result: Dict[str, Any],
-        structured_result: Dict[str, Any],
-    ) -> None:
-        self._log["result"] = legacy_result
-        self._log["structured"] = structured_result
-
-    def set_validation(self, payload: Dict[str, Any]) -> None:
-        self._log["validation"] = payload
-
-    def set_response_layers(self, raw: Dict[str, Any], meta: Dict[str, Any]) -> None:
-        self._log["raw"] = raw
-        self._log["meta"] = meta
+    def set_result(self, result: Dict[str, Any]) -> None:
+        self._log["result"] = result
 
     def set_status(
         self,
@@ -120,17 +87,16 @@ class PipelineTracker:
         message: str = "",
         error: Optional[str] = None,
     ) -> None:
-        self._log["status"] = status
+        self._log["status"]  = status
         self._log["message"] = message
         if error:
             self._log["error"] = error
-        self._log["timing_ms"]["total"] = round(
-            (time.perf_counter() - self._t0) * 1000.0,
-            1,
+        self._log["timing_ms"]["total_ms"] = round(
+            (time.perf_counter() - self._t0) * 1000.0, 1
         )
 
     def total_ms(self) -> float:
-        return float(self._log["timing_ms"].get("total", 0.0))
+        return float(self._log["timing_ms"].get("total_ms", 0.0))
 
     def save(self) -> Path:
         Config.ensure_dirs()

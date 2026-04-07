@@ -5,6 +5,10 @@ Backend dùng service_role key → bypass RLS hoàn toàn.
 Schema:
   - invoices      : Thông tin chính của hóa đơn
   - invoice_items : Danh sách mặt hàng trong hóa đơn
+
+Note:
+  save_result() nhận db_payload đã được map sẵn bởi core.mapper.internal_to_db()
+  thay vì tự map inline — tránh logic bị phân tán nhiều nơi.
 """
 from __future__ import annotations
 
@@ -30,7 +34,7 @@ class DatabaseService:
             cls._client = _get_client()
         return cls._client
 
-    # ── Write operations ───────────────────────────────────────────────────
+    # ── Write operations ───────────────────────────────────────────────────────
 
     @classmethod
     def create_invoice(cls, invoice_id: str, user_id: str) -> None:
@@ -41,14 +45,14 @@ class DatabaseService:
                 "user_id": user_id,
                 "status":  "uploaded",
             }).execute()
-            log.debug(f"DB create_invoice OK id={invoice_id} user={user_id}")
+            log.debug(f"DB create_invoice OK id={invoice_id}")
         except Exception as exc:
             log.error(f"DB create_invoice FAILED id={invoice_id}: {exc}")
             raise
 
     @classmethod
     def update_status(cls, invoice_id: str, status: str, **fields) -> None:
-        """Cập nhật trạng thái pipeline + các trường bổ sung (nếu có)."""
+        """Cập nhật trạng thái pipeline + các trường bổ sung (tuỳ chọn)."""
         payload = {"status": status, **fields}
         try:
             cls._db().table("invoices").update(payload).eq("id", invoice_id).execute()
@@ -60,50 +64,31 @@ class DatabaseService:
     def save_result(
         cls,
         invoice_id: str,
-        structured: Dict[str, Any],
-        items: List[Dict[str, Any]],
+        db_payload: Dict[str, Any],     # pre-mapped bởi mapper.internal_to_db()
+        items: List[Dict[str, Any]],    # internal items (name, quantity, unit_price, total_price)
         ocr_raw_text: str,
         llm_raw: str,
         orig_url: Optional[str],
-        crop_url: Optional[str],
-        detect_confidence: float,
         ocr_confidence: float,
         processing_ms: float,
         needs_review: bool,
     ) -> None:
         """Lưu toàn bộ kết quả trích xuất: cập nhật invoices + insert invoice_items."""
-        invoice_payload: Dict[str, Any] = {
+        invoice_update = {
+            **db_payload,
             "status":               "completed",
             "original_image_url":   orig_url,
-            "cropped_image_url":    crop_url,
+            "cropped_image_url":    orig_url,   # giữ để frontend không bị lỗi khuyết cột
             "ocr_raw_text":         ocr_raw_text,
-            "llm_raw_response":     llm_raw,
-            # Thông tin cửa hàng
-            "store_name":           structured.get("store_name"),
-            "store_address":        structured.get("address"),
-            "store_phone":          structured.get("phone"),
-            # Thông tin hóa đơn
-            "invoice_number":       structured.get("invoice_id"),
-            "cashier_name":         structured.get("cashier"),
-            "table_number":         structured.get("table"),
-            # Danh mục chi tiêu (AI phân loại)
-            "category":             structured.get("category", "Khác"),
-            # Tiền tệ
-            "total_amount":         int(structured.get("total") or 0),
-            "subtotal":             structured.get("subtotal"),
-            "cash_tendered":        structured.get("cash_given"),
-            "cash_change":          structured.get("cash_change"),
-            # Pipeline metrics
-            "detect_confidence":    detect_confidence,
+            "summary":              db_payload.get("summary"),
+            "detect_confidence":    1.0,         # không còn YOLO detector, mặc định 1.0
             "ocr_confidence":       ocr_confidence,
             "processing_time_ms":   processing_ms,
             "needs_review":         needs_review,
         }
-        if structured.get("datetime_in"):
-            invoice_payload["issued_at"] = structured["datetime_in"]
 
         try:
-            cls._db().table("invoices").update(invoice_payload).eq("id", invoice_id).execute()
+            cls._db().table("invoices").update(invoice_update).eq("id", invoice_id).execute()
             log.debug(f"DB save_result invoices OK id={invoice_id}")
         except Exception as exc:
             log.error(f"DB save_result invoices FAILED id={invoice_id}: {exc}")
@@ -138,7 +123,7 @@ class DatabaseService:
             error_message=error_message[:500],
         )
 
-    # ── Read operations ────────────────────────────────────────────────────
+    # ── Read operations ────────────────────────────────────────────────────────
 
     @classmethod
     def get_invoice(cls, invoice_id: str) -> Optional[Dict[str, Any]]:
@@ -154,6 +139,7 @@ class DatabaseService:
             invoice = res.data
             if not invoice:
                 return None
+
             items_res = (
                 cls._db().table("invoice_items")
                 .select("item_name, quantity, unit_price, total_price, sort_order")
@@ -228,9 +214,9 @@ class DatabaseService:
             log.error(f"DB list_invoices_by_date FAILED user={user_id}: {exc}")
             return []
 
-    # ── Backward-compatible aliases (giữ để không vỡ code cũ nếu có) ──────
-    create_bill         = create_invoice
-    get_bill            = get_invoice
-    list_bills          = list_invoices
-    delete_bill         = delete_invoice
-    list_bills_by_date  = list_invoices_by_date
+    # ── Aliases (backward compat) ──────────────────────────────────────────────
+    create_bill        = create_invoice
+    get_bill           = get_invoice
+    list_bills         = list_invoices
+    delete_bill        = delete_invoice
+    list_bills_by_date = list_invoices_by_date

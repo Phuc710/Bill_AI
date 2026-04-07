@@ -48,7 +48,8 @@ CREATE TABLE invoices (
 
     -- ── Dữ liệu thô từ pipeline ──────────────────────────────
     ocr_raw_text        TEXT DEFAULT '',
-    llm_raw_response TEXT DEFAULT NULL,
+    summary             TEXT DEFAULT NULL,
+    llm_raw_response    TEXT DEFAULT NULL,
 
     -- ── Thông tin cửa hàng ────────────────────────────────────
     store_name    TEXT DEFAULT NULL,
@@ -61,6 +62,7 @@ CREATE TABLE invoices (
     closed_at      TIMESTAMPTZ DEFAULT NULL,  -- Giờ ra (nếu là nhà hàng)
     cashier_name   TEXT        DEFAULT NULL,
     table_number   TEXT        DEFAULT NULL,
+    payment_method TEXT        DEFAULT NULL,
     currency       TEXT        NOT NULL DEFAULT 'VND',
 
     -- ── Tiền (BIGINT tránh lỗi float với VND) ────────────────
