@@ -6,6 +6,11 @@ Logging format (colored):
 """
 from __future__ import annotations
 
+import os
+# Suppress ONNX Runtime CUDA missing DLL warnings on Windows/CPU
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+os.environ["ORT_LOGGING_LEVEL"] = "4"
+
 import logging
 import sys
 from contextlib import asynccontextmanager
@@ -13,9 +18,11 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
+from fastapi.staticfiles import StaticFiles
 
 from api.middleware import AuthLoggingMiddleware
 from api.routes.bills import router as bills_router
+from api.routes.dashboard import router as dashboard_router
 from core.config import Config
 
 # Header definition for Swagger UI
@@ -144,7 +151,8 @@ Phải là UUID hợp lệ từ Supabase Auth (ví dụ: `550e8400-e29b-41d4-a71
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",
-    dependencies=[Depends(api_key_header)],
+    # NOTE: Global api_key_header removed — dashboard route uses its own DASHBOARD_KEY auth.
+    # Mobile API auth is enforced by AuthLoggingMiddleware.
 )
 
 # ── Middleware ────────────────────────────────────────────────────────────────
@@ -158,9 +166,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ── Static files (dashboard assets) ──────────────────────────────────────────
+_static_dir = Config.BASE_DIR / "api" / "static"
+if _static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
+
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 app.include_router(bills_router)
+app.include_router(dashboard_router)
 
 
 @app.get("/health", tags=["System"])

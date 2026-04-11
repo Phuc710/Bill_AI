@@ -103,7 +103,6 @@ curl -X POST http://localhost:8000/bills/extract \
     { "item_name": "Trà Sen Vàng", "quantity": 1, "unit_price": 55000, "total_price": 55000 }
   ],
   "meta": {
-    "needs_review": false, // True nếu cờ Cảnh báo Toán học bật
     "detect_confidence": 1.0, 
     "processing_ms": 10500.0, // Thời gian xử lý hệ thống ~10s
     "llm_error": null
@@ -149,7 +148,7 @@ store_name, store_address, store_phone, invoice_number -- (Store info)
 issued_at, closed_at, cashier_name, table_number, payment_method, currency  -- (Invoice Metadata)
 subtotal, discount_amount, total_amount, cash_tendered, cash_change -- (Giá tiền)
 category -- (Phân loại AI)
-detect_confidence, ocr_confidence, processing_time_ms, needs_review
+detect_confidence, ocr_confidence, processing_time_ms
 created_at, updated_at
 ```
 
@@ -204,7 +203,7 @@ Log ghi chuẩn xác luồng thông tin vào console Terminal/server:
 2026-04-04 15:40:38 | INFO | billai.pipeline| [b4dffd2c-..] LLM done | error=None | total=537000 | time=1546ms
 2026-04-04 15:40:39 | INFO | billai.pipeline| [b4dffd2c-..] COMPLETED | store=Nhà Hàng | total=537000 | ocr=5707ms | llm=1546ms | total=10910ms
 ```
-Hệ thống tự động phát hiện `Math warnings` và flag `needs_review=True` nếu Groq Llama gặp lỗi số học để Mobile App bắt người dùng xác nhận.
+Hệ thống tự động phát hiện `Math warnings` để backend log và theo dõi chất lượng trích xuất.
 
 ---
 

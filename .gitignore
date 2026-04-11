@@ -64,3 +64,6 @@ desktop.ini
 dist/
 build/
 *.egg-info/
+
+# Ignore Mobile Project (Backend repository only)
+BillAI_mobile/

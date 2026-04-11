@@ -51,7 +51,6 @@ Mọi kết quả trả về từ `/bills/extract` và `/bills/{bill_id}` đều
   ],
   
   "meta": {
-    "needs_review": false,
     "detect_confidence": 0.98,
     "processing_ms": 7500.5,
     "llm_error": null
@@ -68,10 +67,11 @@ Mọi kết quả trả về từ `/bills/extract` và `/bills/{bill_id}` đều
 - `message`: Chứa "Note" (ghi chú) hoặc "Summary" của bill do AI tự suy nghĩ. Rất tiện để gán thẳng vào cái ô `TextView` Ghi chú mà không cần code thêm rườm rà.
 - `original_image_url`: Render thẳng vào thư viện ảnh Picasso, hoặc Glide để user chạm vào phóng to xem ảnh gốc.
 
-### 2. Thuộc tính `meta` - Góc độ Kỹ thuật và UI
-Khối `meta` chứa các thông số Backend trả về. **Tuyệt đối phân định rõ:**
-- **Thông số phân tích (Backend hiểu/lưu)**: Các thông số `detect_confidence`, `processing_ms`, `llm_error`. Góc độ Mobile App **KHÔNG CẦN QUAN TÂM** mấy số này lên UI (chỉ dùng bắn lên Crashlytics/Log nếu cần thiết).
-- **Thông số UI**: Báo đỏ an toàn (`meta.needs_review`). Dev mobile không bao giờ nên viết logic tính lại tiền (`quantity * price`) bằng tay trên điện thoại. Cứ `needs_review == true`, Mobile App **TỰ ĐỘNG Bật Khung Đỏ (Warning Banner)** nhắc người dùng rà soát lại thông tin. Lỗi sai rủi ro tiền bạc cứ đổ hết qua phía Backend xử lý! 🚀
+### 2. Thuộc tính `meta` - Góc độ Kỹ thuật
+Khối `meta` chứa các thông số Backend trả về:
+- `detect_confidence`, `processing_ms`, `llm_error`
+
+Góc độ Mobile App **KHÔNG CẦN QUAN TÂM** mấy số này lên UI (chỉ dùng bắn lên Crashlytics/Log nếu cần thiết).
 
 ### 3. Thuộc tính `data` - Thiết kế Giao diện Kháng Thay Đổi (Dynamic UI)
 Object `data` chứa các trường cốt lõi của **mọi thể loại giao dịch Tài chính**. Bất kỳ bill gì (Tiền điện, nước, internet) cũng không thoát khỏi:

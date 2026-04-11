@@ -31,6 +31,7 @@ from core.database import DatabaseService
 from core.mapper import db_to_api_response
 from core.pipeline import InvoicePipeline
 from core.storage import StorageService
+from api.schemas import BillUpdateRequest
 
 log = logging.getLogger("billai.routes")
 router = APIRouter(prefix="/bills", tags=["Bills"])
@@ -179,6 +180,28 @@ async def get_bill(bill_id: str) -> dict:
         raise HTTPException(404, f"Không tìm thấy hóa đơn: {bill_id}")
 
     # mapper.db_to_api_response đảm bảo đúng format cho app
+    items = row.pop("items", [])
+    return db_to_api_response(row, items)
+
+
+# ── PUT /bills/{bill_id} ───────────────────────────────────────────────────────
+
+@router.put(
+    "/{bill_id}",
+    summary="Cập nhật hóa đơn",
+    description="Cập nhật các trường chỉnh tay (đặc biệt note) và lưu trực tiếp vào Supabase.",
+)
+async def update_bill(bill_id: str, payload: BillUpdateRequest) -> dict:
+    updates = payload.model_dump(exclude_unset=True, exclude_none=True)
+
+    ok = await run_in_threadpool(DatabaseService.update_invoice_fields, bill_id, updates)
+    if not ok:
+        raise HTTPException(500, f"Cập nhật hóa đơn thất bại: {bill_id}")
+
+    row = await run_in_threadpool(DatabaseService.get_invoice, bill_id)
+    if not row:
+        raise HTTPException(404, f"Không tìm thấy hóa đơn: {bill_id}")
+
     items = row.pop("items", [])
     return db_to_api_response(row, items)
 

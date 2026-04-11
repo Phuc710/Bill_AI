@@ -28,7 +28,7 @@ log = logging.getLogger("billai.groq_extractor")
 # ── System prompt (gọn, ổn định) ─────────────────────────────────────────────
 
 _SYSTEM_PROMPT = """\
-Bạn là chuyên gia kế toán Việt Nam.
+Bạn là chuyên gia Document Việt Nam.
 Phân tích văn bản OCR hóa đơn và xuất JSON THEO ĐÚNG schema sau.
 Tự sửa lỗi chính tả OCR. Gộp các món trùng lặp (Coca xuất hiện 2 lần → cộng qty).
 

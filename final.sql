@@ -166,7 +166,7 @@ CREATE TRIGGER trg_invoices_set_updated_at
 
 -- ============================================================
 -- ROW LEVEL SECURITY (RLS)
--- - User (anon key) : chỉ đọc/xóa dữ liệu của chính mình.
+-- - User (anon key) : chỉ đọc/sửa/xóa dữ liệu của chính mình.
 -- - Backend (service_role key) : bypass RLS hoàn toàn.
 -- ============================================================
 ALTER TABLE invoices      ENABLE ROW LEVEL SECURITY;
@@ -179,6 +179,11 @@ CREATE POLICY "policy_user_select_own_invoices"
 CREATE POLICY "policy_user_delete_own_invoices"
     ON invoices FOR DELETE
     USING (user_id = auth.uid());
+
+CREATE POLICY "policy_user_update_own_invoices"
+    ON invoices FOR UPDATE
+    USING (user_id = auth.uid())
+    WITH CHECK (user_id = auth.uid());
 
 CREATE POLICY "policy_user_select_own_invoice_items"
     ON invoice_items FOR SELECT
@@ -240,10 +245,11 @@ SELECT
     inv.currency,
     inv.category,
     inv.cropped_image_url,
-    inv.needs_review,
     inv.processing_time_ms,
     inv.created_at,
-    inv.note,  -- <==== ĐÃ THÊM Ở ĐÂY NÈ!
+    inv.error_message,
+    inv.summary,
+    inv.note,
     COUNT(itm.id)::INT AS item_count
 FROM      invoices     inv
 LEFT JOIN invoice_items itm ON itm.invoice_id = inv.id

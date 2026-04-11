@@ -31,7 +31,8 @@ class AuthLoggingMiddleware(BaseHTTPMiddleware):
         request.state.request_id = request_id
 
         # ── Auth check ────────────────────────────────────────────────────
-        if request.url.path not in _OPEN_PATHS:
+        path = request.url.path
+        if path not in _OPEN_PATHS and not path.startswith("/dashboard") and not path.startswith("/static"):
             api_key = request.headers.get("X-API-Key", "")
             if not api_key or api_key != Config.API_SECRET_KEY:
                 masked = (api_key[:6] + "…") if len(api_key) >= 6 else "MISSING"

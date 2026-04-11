@@ -35,6 +35,7 @@ def internal_to_api_response(
         "status":             "completed",
         "failed_step":        None,
         "message":            internal.get("summary"),
+        "note":               None,
         "original_image_url": orig_url,
         "cropped_image_url":  orig_url,
         "data": {
@@ -69,6 +70,7 @@ def failed_api_response(
         "status":             "failed",
         "failed_step":        failed_step,
         "message":            message,   # Mobile hiển thị này thông báo lỗi cho user
+        "note":               None,
         "original_image_url": orig_url,
         "cropped_image_url":  orig_url,
         "data":               None,
@@ -132,6 +134,7 @@ def db_to_api_response(
         "status":             db_row.get("status"),
         "failed_step":        db_row.get("failed_step"),
         "message":            db_row.get("summary") if db_row.get("status") == "completed" else db_row.get("error_message"),
+        "note":               db_row.get("note"),
         "original_image_url": db_row.get("original_image_url"),
         "cropped_image_url":  db_row.get("cropped_image_url"),
         "data": {
@@ -150,7 +153,6 @@ def db_to_api_response(
         },
         "items": api_items,
         "meta": {
-            "needs_review":      bool(db_row.get("needs_review", False)),
             "detect_confidence": float(db_row.get("detect_confidence") or 0.0),
             "processing_ms":     float(db_row.get("processing_time_ms") or 0.0),
             "llm_error":         db_row.get("error_message"),

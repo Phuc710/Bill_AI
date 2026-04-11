@@ -61,6 +61,37 @@ class DatabaseService:
             log.warning(f"DB update_status FAILED [{status}] id={invoice_id}: {exc}")
 
     @classmethod
+    def update_invoice_fields(cls, invoice_id: str, fields: Dict[str, Any]) -> bool:
+        """Update các field cho phép từ màn hình edit bill."""
+        allowed = {
+            "store_name",
+            "store_address",
+            "store_phone",
+            "invoice_number",
+            "issued_at",
+            "total_amount",
+            "payment_method",
+            "category",
+            "note",
+        }
+        payload = {k: v for k, v in fields.items() if k in allowed}
+        if not payload:
+            return True
+
+        # Nếu user đã chỉnh tay thì coi như bill đã hoàn thiện.
+        payload["status"] = "completed"
+        payload["failed_step"] = None
+        payload["error_message"] = None
+
+        try:
+            cls._db().table("invoices").update(payload).eq("id", invoice_id).execute()
+            log.info(f"DB update_invoice_fields OK id={invoice_id} fields={sorted(payload.keys())}")
+            return True
+        except Exception as exc:
+            log.error(f"DB update_invoice_fields FAILED id={invoice_id}: {exc}")
+            return False
+
+    @classmethod
     def save_result(
         cls,
         invoice_id: str,
@@ -71,7 +102,6 @@ class DatabaseService:
         orig_url: Optional[str],
         ocr_confidence: float,
         processing_ms: float,
-        needs_review: bool,
     ) -> None:
         """Lưu toàn bộ kết quả trích xuất: cập nhật invoices + insert invoice_items."""
         invoice_update = {
@@ -84,7 +114,6 @@ class DatabaseService:
             "detect_confidence":    1.0,         # không còn YOLO detector, mặc định 1.0
             "ocr_confidence":       ocr_confidence,
             "processing_time_ms":   processing_ms,
-            "needs_review":         needs_review,
         }
 
         try:
@@ -167,7 +196,7 @@ class DatabaseService:
                 cls._db().table("invoices")
                 .select(
                     "id, user_id, status, store_name, total_amount, currency, "
-                    "category, cropped_image_url, needs_review, "
+                    "category, cropped_image_url, note, summary, error_message, "
                     "created_at, failed_step, issued_at"
                 )
                 .eq("user_id", user_id)
@@ -214,9 +243,96 @@ class DatabaseService:
             log.error(f"DB list_invoices_by_date FAILED user={user_id}: {exc}")
             return []
 
-    # ── Aliases (backward compat) ──────────────────────────────────────────────
+    # ── Aliases (backward compat) ──────────────────────────────────────────
     create_bill        = create_invoice
     get_bill           = get_invoice
     list_bills         = list_invoices
     delete_bill        = delete_invoice
     list_bills_by_date = list_invoices_by_date
+
+    # ── Admin / Dashboard ──────────────────────────────────────────────────
+
+    @classmethod
+    def get_admin_stats(cls) -> dict:
+        """Stats tổng hợp cho admin dashboard — không filter theo user_id."""
+        try:
+            db = cls._db()
+
+            # ── All-time totals ──────────────────────────────────────────
+            all_res = (
+                db.table("invoices")
+                .select("id, status, processing_time_ms, ocr_confidence, created_at, category")
+                .execute()
+            )
+            all_rows = all_res.data or []
+            total       = len(all_rows)
+            completed   = sum(1 for r in all_rows if r.get("status") == "completed")
+            failed      = sum(1 for r in all_rows if r.get("status") == "failed")
+            
+            avg_ms_list = [r.get("processing_time_ms") or 0 for r in all_rows if r.get("processing_time_ms")]
+            avg_ms      = round(sum(avg_ms_list) / len(avg_ms_list), 1) if avg_ms_list else 0.0
+            
+            conf_list   = [r.get("ocr_confidence") or 0 for r in all_rows if r.get("ocr_confidence")]
+            avg_conf    = round((sum(conf_list) / len(conf_list)) * 100, 1) if conf_list else 0.0
+
+            # ── Đếm category cho biểu đồ ──────────────────────────────
+            cat_counts = {}
+            for r in all_rows:
+                c = r.get("category") or "Khác"
+                cat_counts[c] = cat_counts.get(c, 0) + 1
+
+            # ── Today (UTC) ──────────────────────────────────────────────
+            from datetime import datetime, timezone
+            today_str  = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            today_res  = (
+                db.table("invoices")
+                .select("id, status")
+                .gte("created_at", f"{today_str}T00:00:00Z")
+                .execute()
+            )
+            today_rows      = today_res.data or []
+            today_total     = len(today_rows)
+            today_completed = sum(1 for r in today_rows if r.get("status") == "completed")
+
+            # ── 50 bills mới nhất để vẽ bảng + trend chart ─────────────────
+            recent_res = (
+                db.table("invoices")
+                .select(
+                    "id, user_id, status, failed_step, store_name, "
+                    "total_amount, category, cropped_image_url, ocr_raw_text, summary, "
+                    "processing_time_ms, ocr_confidence, created_at, error_message"
+                )
+                .order("created_at", desc=True)
+                .limit(50)
+                .execute()
+            )
+            recent_rows = recent_res.data or []
+
+            # Serialize datetime objects
+            for r in recent_rows:
+                for k, v in r.items():
+                    if hasattr(v, "isoformat"):
+                        r[k] = v.isoformat()
+
+            success_rate = round(completed / total * 100, 1) if total > 0 else 0.0
+
+            return {
+                "total":           total,
+                "completed":       completed,
+                "failed":          failed,
+                "success_rate":    success_rate,
+                "avg_ms":          avg_ms,
+                "avg_conf":        avg_conf,
+                "cat_counts":      cat_counts,
+                "today_total":     today_total,
+                "today_completed": today_completed,
+                "recent":          recent_rows,
+            }
+        except Exception as exc:
+            log.error(f"DB get_admin_stats FAILED: {exc}")
+            return {
+                "total": 0, "completed": 0, "failed": 0,
+                "success_rate": 0.0, "avg_ms": 0.0, "avg_conf": 0.0,
+                "cat_counts": {}, "today_total": 0, "today_completed": 0,
+                "recent": [],
+            }

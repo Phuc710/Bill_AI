@@ -1,16 +1,18 @@
-# Bill AI — OCR-first
-# pip install -r requirements.txt
+# Bill AI - OCR-first backend
+# Install: pip install -r requirements.txt
 
 # OCR
 vncv
-
-# Core
 Pillow>=10.0.0
 opencv-python-headless>=4.9.0
+
+# API
 fastapi>=0.110.0
 uvicorn[standard]>=0.29.0
 python-multipart>=0.0.9
 pydantic>=2.0.0
 python-dotenv>=1.0.0
-google-generativeai>=0.8.0
-pip install supabase
+
+# External services
+groq>=0.16.0
+supabase>=2.4.0

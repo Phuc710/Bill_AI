@@ -48,7 +48,8 @@ class Config:
 
 
     # ── Security ───────────────────────────────────────────────────────────
-    API_SECRET_KEY: str = os.getenv("API_SECRET_KEY", "")
+    API_SECRET_KEY:  str = os.getenv("API_SECRET_KEY", "")
+    DASHBOARD_KEY:   str = os.getenv("DASHBOARD_KEY", "")   # Admin dashboard — set trên Render
 
     # ── Supabase ───────────────────────────────────────────────────────────
     SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")

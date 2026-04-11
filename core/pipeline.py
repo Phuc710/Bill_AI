@@ -125,15 +125,11 @@ class InvoicePipeline:
                 f"total={internal.get('total')} err={error_type} | {llm_ms:.0f}ms"
             )
 
-            # ── Step 5: Build định lượng chất lượng cho DB (backend only) ──────
+            # ── Step 5: Processing metrics (backend only) ─────────────────────
             processing_ms = (time.perf_counter() - t0) * 1000
-            # needs_review chỉ lưu DB để backend monitor, KHÔNG gửi ra mobile
-            low_conf     = ocr.confidence_avg < Config.OCR_MIN_CONF
-            low_total    = int(internal.get("total") or 0) <= 0
-            needs_review = bool(error_type or low_conf or low_total or math_warnings)
-            if needs_review:
+            if error_type or math_warnings:
                 log.warning(
-                    f"[{tracker.request_id}] LOW QUALITY "
+                    f"[{tracker.request_id}] QUALITY WARNING "
                     f"conf={ocr.confidence_avg:.2f} total={internal.get('total')} "
                     f"err={error_type} math={bool(math_warnings)}"
                 )
@@ -151,7 +147,6 @@ class InvoicePipeline:
                 orig_url       = orig_url,
                 ocr_confidence = ocr.confidence_avg,
                 processing_ms  = processing_ms,
-                needs_review   = needs_review,
             )
 
             log.info(
@@ -188,4 +183,3 @@ class InvoicePipeline:
             s   = Config.MAX_INPUT_SIDE / max(w, h)
             img = img.resize((int(w * s), int(h * s)), Image.Resampling.LANCZOS)
         return img
-
