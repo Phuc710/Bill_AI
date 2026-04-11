@@ -212,4 +212,4 @@ def process_bill_pipeline(image_path):
         print(f"❌ Có lỗi ở khâu Groq AI: {e}")
 
 if __name__ == "__main__":
-    process_bill_pipeline("bill1.png")
+    process_bill_pipeline("test.jpg")

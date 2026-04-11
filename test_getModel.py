@@ -1,5 +1,6 @@
 from dotenv import load_dotenv
 from groq import Groq
+import os
 
 load_dotenv() # Load from .env
 

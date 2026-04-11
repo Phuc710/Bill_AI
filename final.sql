@@ -220,3 +220,31 @@ LEFT JOIN invoice_items itm ON itm.invoice_id = inv.id
 GROUP BY  inv.id;
 
 COMMENT ON VIEW v_invoice_summary IS 'View tóm tắt hóa đơn dùng cho History Screen trên App Android.';
+-- 1. Thêm cột 'note' vào bảng invoices
+ALTER TABLE invoices ADD COLUMN note TEXT DEFAULT NULL;
+
+-- 2. Đập đi xây lại cái View v_invoice_summary để nó nhặt thêm cái cột 'note' này trả về cho App Android
+DROP VIEW IF EXISTS v_invoice_summary CASCADE;
+
+CREATE VIEW v_invoice_summary
+WITH (security_invoker = true) AS
+SELECT
+    inv.id,
+    inv.user_id,
+    inv.status,
+    inv.failed_step,
+    inv.store_name,
+    inv.invoice_number,
+    inv.issued_at,
+    inv.total_amount,
+    inv.currency,
+    inv.category,
+    inv.cropped_image_url,
+    inv.needs_review,
+    inv.processing_time_ms,
+    inv.created_at,
+    inv.note,  -- <==== ĐÃ THÊM Ở ĐÂY NÈ!
+    COUNT(itm.id)::INT AS item_count
+FROM      invoices     inv
+LEFT JOIN invoice_items itm ON itm.invoice_id = inv.id
+GROUP BY  inv.id;

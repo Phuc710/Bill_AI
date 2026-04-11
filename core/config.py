@@ -37,7 +37,6 @@ def _env_bool(name: str, default: bool) -> bool:
 class Config:
     BASE_DIR: Path = _BASE_DIR
     LOGS_DIR: Path = _BASE_DIR / "logs"
-    OUTPUTS_DIR: Path = _BASE_DIR / "outputs"
     EXTRACTION_PROMPT: Path = _BASE_DIR / "extraction_vi.txt"
 
     # ── Groq (Primary LLM — Llama 3.3 70B) ────────────────────────────────
@@ -73,4 +72,3 @@ class Config:
     @classmethod
     def ensure_dirs(cls) -> None:
         cls.LOGS_DIR.mkdir(parents=True, exist_ok=True)
-        cls.OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)

@@ -92,13 +92,26 @@ async def extract_bill(
             file.filename or "image.jpg",
             user_id,
             bill_id,
+            request_id=req_id,   # ← truyền vào tracker để log ID thống nhất
         )
     except Exception as exc:
         log.error(f"[{req_id}] Pipeline exception: {exc}")
         raise HTTPException(500, f"Pipeline error: {exc}")
 
-    log.info(f"[{req_id}] extract_bill DONE | bill={bill_id} status={result.get('status')}")
-    return result
+    status = result.get("status")
+    meta   = result.get("meta") or {}
+    ocr_ms  = meta.get("ocr_ms",  0)
+    llm_ms  = meta.get("llm_ms",  0)
+    total_ms = meta.get("processing_ms", 0)
+
+    # Timing header → middleware sẽ append vào access log
+    from fastapi.responses import JSONResponse
+    response = JSONResponse(content=result)
+    response.headers["X-Pipeline-Timing"] = (
+        f"OCR:{ocr_ms:.0f}ms LLM:{llm_ms:.0f}ms TOTAL:{total_ms:.0f}ms status={status}"
+    )
+    log.info(f"[{req_id}] extract_bill DONE | bill={bill_id} status={status}")
+    return response
 
 
 # ── GET /bills ─────────────────────────────────────────────────────────────────

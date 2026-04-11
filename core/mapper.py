@@ -24,32 +24,17 @@ def internal_to_api_response(
     internal: Dict[str, Any],
     bill_id: str,
     orig_url: Optional[str],
-    ocr_error: Optional[str],
-    llm_error: Optional[str],
-    processing_ms: float,
-    needs_review: bool,
 ) -> Dict[str, Any]:
     """
-    Map internal extractor schema → API response shape app Android expects.
-    Field names phải khớp chính xác với BillModels.kt (kể cả @SerializedName).
-
-    Mapping:
-      internal.store_name   → data.store_name
-      internal.address      → data.store_address        (@SerializedName)
-      internal.phone        → data.store_phone          (@SerializedName)
-      internal.invoice_id   → data.invoice_number       (@SerializedName)
-      internal.datetime_in  → data.issued_at            (@SerializedName)
-      internal.total        → data.total_amount         (@SerializedName)
-      internal.items[].name → items[].item_name         (@SerializedName)
-      llm_error/ocr_error   → meta.llm_error   (lỗi từ Groq Llama 3.3)
+    Map internal extractor schema → API response (Android BillModels.kt).
+    status luôn = "completed" nếu gọi hàm này.
     """
     items = [_item_internal_to_api(i) for i in (internal.get("items") or [])]
-
     return {
         "bill_id":            bill_id,
         "status":             "completed",
         "failed_step":        None,
-        "message":            internal.get("summary"),  # The UI uses message as note
+        "message":            internal.get("summary"),
         "original_image_url": orig_url,
         "cropped_image_url":  orig_url,
         "data": {
@@ -67,13 +52,6 @@ def internal_to_api_response(
             "currency":       "VND",
         },
         "items": items,
-        "meta": {
-            "needs_review":      needs_review,
-            "detect_confidence": 1.0,
-            "processing_ms":     round(processing_ms, 1),
-            # llm_error: lỗi Groq Llama 3.3 hoặc OCR
-            "llm_error":         llm_error or ocr_error,
-        },
     }
 
 
@@ -90,17 +68,11 @@ def failed_api_response(
         "bill_id":            bill_id,
         "status":             "failed",
         "failed_step":        failed_step,
-        "message":            message,
+        "message":            message,   # Mobile hiển thị này thông báo lỗi cho user
         "original_image_url": orig_url,
         "cropped_image_url":  orig_url,
         "data":               None,
         "items":              [],
-        "meta": {
-            "needs_review":      True,
-            "detect_confidence": 0.0,
-            "processing_ms":     elapsed,
-            "llm_error":         failed_step,
-        },
     }
 
 

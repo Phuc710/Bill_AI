@@ -48,13 +48,18 @@ class AuthLoggingMiddleware(BaseHTTPMiddleware):
 
         # ── Process request ───────────────────────────────────────────────
         response = await call_next(request)
-        duration_ms = (time.perf_counter() - start) * 1000
+        elapsed_ms = (time.perf_counter() - start) * 1000
 
-        user_id = request.headers.get("X-User-Id", "-")
+        # Pipeline timing hint (injected by route nếu có)
+        timing_hint = response.headers.get("X-Pipeline-Timing", "")
+        extra = f" | {timing_hint}" if timing_hint else ""
+
         log.info(
-            f"[{request_id}] {request.method} {request.url.path} | "
-            f"status={response.status_code} | {duration_ms:.0f}ms | "
-            f"ip={client_ip} | user={user_id}"
+            f"[{request_id}] {request.method} {request.url.path}"
+            f" | {response.status_code} | {elapsed_ms:.0f}ms"
+            f"{extra} | ip={client_ip}"
         )
-        response.headers["X-Request-Id"] = request_id
+        response.headers["X-Request-Id"]    = request_id
+        response.headers["X-Response-Time"] = f"{elapsed_ms:.0f}ms"
         return response
+

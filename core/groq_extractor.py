@@ -45,7 +45,7 @@ Schema BẮT BUỘC:
     "items": [
         {"name": "Tên món", "qty": 1, "unit_price": 25000, "amount": 25000}
     ],
-    "summary": "Tóm tắt ngắn bằng tiếng Việt"
+    "summary": "Ghi chú chi tiêu"
 }
 
 Quy tắc SỐ LIỆU (nghiêm ngặt):
@@ -54,6 +54,17 @@ Quy tắc SỐ LIỆU (nghiêm ngặt):
 3. amount = qty × unit_price (bắt buộc nhất quán).
 4. Nếu trùng món → CỘNG DỒN qty. Không tạo 2 dòng cho cùng 1 món.
 5. KHÔNG output Markdown, KHÔNG dùng ```json. Chỉ JSON thuần.
+
+Quy tắc viết "summary" — ĐÂY LÀ GHI CHÚ TỰ ĐỘNG cho app tài chính cá nhân:
+Viết như người dùng TỰ TAY ghi nhật ký chi tiêu — ngắn gọn, tự nhiên, đủ thông tin.
+Cấu trúc chuẩn: [Hoạt động] tại [Tên quán/địa điểm] · [2-3 món/hạng mục nổi bật] · Tổng: [số tiền]đ
+Ví dụ theo từng category:
+  Ăn uống  → "Ăn BBQ tại Quá Đã BBQ, Q.10 · Sườn nướng, trà đào, cà phê · Tổng: 636.000đ"
+  Mua sắm  → "Mua sắm tại VinMart, Tân Phú · Thực phẩm, gia dụng · Tổng: 285.000đ"
+  Di chuyển→ "Đi Grab từ Q.1 về Bình Thạnh · Tổng: 45.000đ"
+  Giải trí → "Xem phim tại CGV Vincom · 2 vé + bắp rang · Tổng: 220.000đ"
+  Sức khỏe → "Mua thuốc tại Pharmacity, Q.3 · Panadol, vitamin C · Tổng: 95.000đ"
+KHÔNG dùng câu "Khách hàng đã thanh toán...". Luôn dùng giọng cá nhân, chủ động, ngắn gọn.
 
 Category (chọn 1 trong 6):
   Ăn uống   → nhà hàng, café, quán ăn, trà sữa
@@ -208,25 +219,29 @@ _TOLERANCE = 0.05  # 5% chênh lệch cho phép
 def _validate_math(internal: Dict[str, Any]) -> List[str]:
     """
     Validate tính nhất quán số học:
-      1. qty × unit_price ≈ total_price (với tolerance 5%)
-      2. sum(items.total_price) ≈ total (với tolerance 5%)
+      1. quantity × unit_price ≈ total_price (tolerance 5%)
+      2. sum(items.total_price) ≈ total (tolerance 5%)
+    Internal keys: "quantity", "unit_price", "total_price" (set by _parse_items)
     """
     warnings: List[str] = []
     items: List[Dict[str, Any]] = internal.get("items") or []
 
     item_sum = 0
     for i, item in enumerate(items):
-        qty        = item.get("quantity", 1)
-        unit_price = item.get("unit_price", 0)
-        total_price = item.get("total_price", 0)
-        item_sum  += total_price
+        qty         = int(item.get("quantity") or 1)
+        unit_price  = int(item.get("unit_price") or 0)
+        total_price = int(item.get("total_price") or 0)
+        item_sum   += total_price
 
+        # Chỉ validate khi cả 3 trường đều có dữ liệu thực
         if qty > 0 and unit_price > 0 and total_price > 0:
             expected = qty * unit_price
-            if expected > 0 and abs(total_price - expected) / expected > _TOLERANCE:
+            diff_ratio = abs(total_price - expected) / expected
+            if diff_ratio > _TOLERANCE:
                 warnings.append(
-                    f"item[{i}] '{item.get('name','?')}': "
-                    f"qty({qty})×unit({unit_price})={expected} ≠ amount({total_price})"
+                    f"item[{i}] '{item.get('name', '?')}': "
+                    f"{qty}×{unit_price}={expected} ≠ total_price={total_price} "
+                    f"({diff_ratio*100:.1f}% lệch)"
                 )
 
     total = int(internal.get("total") or 0)
@@ -234,7 +249,7 @@ def _validate_math(internal: Dict[str, Any]) -> List[str]:
         diff = abs(item_sum - total) / total
         if diff > _TOLERANCE:
             warnings.append(
-                f"sum(items)={item_sum} ≠ total={total} (diff {diff*100:.1f}%)"
+                f"sum(items)={item_sum:,} ≠ total={total:,} (lệch {diff*100:.1f}%)"
             )
 
     return warnings

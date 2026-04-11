@@ -26,6 +26,7 @@ from PIL import Image, ImageOps
 from core.config import Config
 from core.database import DatabaseService
 from core.groq_extractor import GroqExtractor
+from core.logger import PipelineTracker
 from core.mapper import failed_api_response, internal_to_api_response, internal_to_db
 from core.ocr import extract_text as ocr_extract_text
 from core.storage import StorageService
@@ -45,16 +46,18 @@ class InvoicePipeline:
         filename: str,
         user_id: str,
         bill_id: str,
+        request_id: str = "",
     ) -> Dict[str, Any]:
         import asyncio
+        tracker = PipelineTracker(request_id=request_id or bill_id[:12], user_id=user_id)
         t0 = time.perf_counter()
-        log.info(f"[{bill_id}] Pipeline START | file={filename} user={user_id}")
+        log.info(f"[{tracker.request_id}] START bill={bill_id} file={filename}")
 
         # ── DB: tạo row ban đầu ───────────────────────────────────────────────
         try:
             await asyncio.to_thread(DatabaseService.create_invoice, bill_id, user_id)
         except Exception as exc:
-            log.error(f"[{bill_id}] DB create failed: {exc}")
+            log.error(f"[{tracker.request_id}] DB init FAILED: {exc}")
             return failed_api_response(bill_id, "db_init", "DB error", t0=t0)
 
         orig_url: Optional[str] = None
@@ -65,42 +68,40 @@ class InvoicePipeline:
 
             # ── Step 2 & 3: Upload & OCR song song (Parallel) ─────────────────
             async def _upload_task():
+                # Set detecting trước khi upload
                 await asyncio.to_thread(DatabaseService.update_status, bill_id, "detecting")
                 return await asyncio.to_thread(StorageService.upload_image, image, bill_id, "Original")
 
             async def _ocr_task():
-                # We do not set status to OCR done at the start of OCR task, we do it after.
-                t_ocr = time.perf_counter()
+                tracker.start_step("ocr_ms")
                 res = await asyncio.to_thread(ocr_extract_text, image)
-                return res, (time.perf_counter() - t_ocr) * 1000
+                ocr_ms = tracker.end_step("ocr_ms")
+                return res, ocr_ms
 
-            log.info(f"[{bill_id}] Starting Upload & OCR concurrently")
+            log.info(f"[{tracker.request_id}] Upload + OCR → parallel start")
             upload_task = asyncio.create_task(_upload_task())
-            ocr_task = asyncio.create_task(_ocr_task())
+            ocr_task    = asyncio.create_task(_ocr_task())
 
             orig_url, (ocr, ocr_ms) = await asyncio.gather(upload_task, ocr_task)
-            log.info(f"[{bill_id}] Uploaded original: {orig_url}")
 
-            if ocr.error_type:
-                log.warning(
-                    f"[{bill_id}] OCR error | type={ocr.error_type} | {ocr.error_message}"
-                )
+            tracker.set_ocr(ocr.text_raw or "", ocr.confidence_avg, ocr.preprocess_mode)
 
+            # Một lần update DB duy nhất sau khi cả 2 task xong
             await asyncio.to_thread(
                 DatabaseService.update_status,
                 bill_id, "ocr_done",
                 ocr_raw_text=ocr.text_raw or "",
             )
             log.info(
-                f"[{bill_id}] OCR done | mode={ocr.preprocess_mode} | "
-                f"chars={len(ocr.text_raw or '')} | conf={ocr.confidence_avg:.3f} | "
-                f"time={ocr_ms:.0f}ms"
+                f"[{tracker.request_id}] OCR done "
+                f"mode={ocr.preprocess_mode} chars={len(ocr.text_raw or '')} "
+                f"conf={ocr.confidence_avg:.3f} | {ocr_ms:.0f}ms"
             )
 
             # Guard: không quét được chữ nào
             if not (ocr.text_raw or "").strip():
                 await asyncio.to_thread(DatabaseService.mark_failed, bill_id, "ocr", "Không tìm thấy văn bản trên ảnh")
-                log.warning(f"[{bill_id}] OCR empty — pipeline failed")
+                log.warning(f"[{tracker.request_id}] OCR empty — pipeline aborted")
                 return failed_api_response(
                     bill_id, "ocr",
                     "Không tìm thấy hóa đơn (None Text Detected)",
@@ -108,63 +109,69 @@ class InvoicePipeline:
                 )
 
             # ── Step 4: Groq Llama 3.3 70B Normalize ─────────────────────────
-            await asyncio.to_thread(DatabaseService.update_status, bill_id, "normalizing")
-            t_llm = time.perf_counter()
+            # Không update_status("normalizing") ở đây để tiết kiệm 1 DB round-trip
+            tracker.start_step("llm_ms")
             extraction = await asyncio.to_thread(self._extractor.extract, ocr_text=ocr.text_raw)
-            llm_ms = (time.perf_counter() - t_llm) * 1000
+            llm_ms = tracker.end_step("llm_ms")
 
-            internal    = extraction.get("internal") or {}
-            raw_response = extraction.get("raw_response", "")
-            error_type   = extraction.get("error_type")
+            internal      = extraction.get("internal") or {}
+            raw_response  = extraction.get("raw_response", "")
+            error_type    = extraction.get("error_type")
             math_warnings = internal.pop("_math_warnings", None)
 
+            tracker.set_llm(raw_response)
             log.info(
-                f"[{bill_id}] LLM done | error={error_type} | "
-                f"total={internal.get('total')} | time={llm_ms:.0f}ms"
+                f"[{tracker.request_id}] LLM done "
+                f"total={internal.get('total')} err={error_type} | {llm_ms:.0f}ms"
             )
 
-            # ── Step 5: Validate & map ────────────────────────────────────────
+            # ── Step 5: Build định lượng chất lượng cho DB (backend only) ──────
             processing_ms = (time.perf_counter() - t0) * 1000
-            needs_review  = self._needs_review(
-                internal, ocr.confidence_avg, error_type, math_warnings
-            )
+            # needs_review chỉ lưu DB để backend monitor, KHÔNG gửi ra mobile
+            low_conf     = ocr.confidence_avg < Config.OCR_MIN_CONF
+            low_total    = int(internal.get("total") or 0) <= 0
+            needs_review = bool(error_type or low_conf or low_total or math_warnings)
+            if needs_review:
+                log.warning(
+                    f"[{tracker.request_id}] LOW QUALITY "
+                    f"conf={ocr.confidence_avg:.2f} total={internal.get('total')} "
+                    f"err={error_type} math={bool(math_warnings)}"
+                )
 
             # ── Step 6: Save to Supabase ──────────────────────────────────────
-            items: List[Dict[str, Any]] = internal.get("items") or []
+            items      = internal.get("items") or []
             db_payload = internal_to_db(internal)
-
             await asyncio.to_thread(
                 DatabaseService.save_result,
-                invoice_id      = bill_id,
-                db_payload      = db_payload,
-                items           = items,
-                ocr_raw_text    = ocr.text_raw or "",
-                llm_raw         = raw_response,
-                orig_url        = orig_url,
-                ocr_confidence  = ocr.confidence_avg,
-                processing_ms   = processing_ms,
-                needs_review    = needs_review,
-            )
-            log.info(
-                f"[{bill_id}] COMPLETED | store={internal.get('store_name')} | "
-                f"total={internal.get('total')} | "
-                f"ocr={ocr_ms:.0f}ms | llm={llm_ms:.0f}ms | total={processing_ms:.0f}ms"
+                invoice_id     = bill_id,
+                db_payload     = db_payload,
+                items          = items,
+                ocr_raw_text   = ocr.text_raw or "",
+                llm_raw        = raw_response,
+                orig_url       = orig_url,
+                ocr_confidence = ocr.confidence_avg,
+                processing_ms  = processing_ms,
+                needs_review   = needs_review,
             )
 
-            # ── Step 7: Return clean API response ────────────────────────────
-            return internal_to_api_response(
-                internal      = internal,
-                bill_id       = bill_id,
-                orig_url      = orig_url,
-                ocr_error     = ocr.error_type,
-                llm_error     = error_type,
-                processing_ms = processing_ms,
-                needs_review  = needs_review,
+            log.info(
+                f"[{tracker.request_id}] DONE "
+                f"store='{internal.get('store_name')}' total={internal.get('total')} "
+                f"| OCR: {ocr_ms:.0f}ms | LLM: {llm_ms:.0f}ms | TOTAL: {processing_ms:.0f}ms"
             )
+
+            api_response = internal_to_api_response(
+                internal = internal,
+                bill_id  = bill_id,
+                orig_url = orig_url,
+            )
+            tracker.set_result(api_response)
+            tracker.set_status("completed", message=internal.get("summary", ""))
+            return api_response
 
         except Exception as exc:
             stack = traceback.format_exc(limit=5)
-            log.error(f"[{bill_id}] UNCAUGHT: {exc}\n{stack}")
+            log.error(f"[{tracker.request_id}] UNCAUGHT: {exc}\n{stack}")
             try:
                 await asyncio.to_thread(DatabaseService.mark_failed, bill_id, "unknown", str(exc)[:400])
             except Exception:
@@ -182,26 +189,3 @@ class InvoicePipeline:
             img = img.resize((int(w * s), int(h * s)), Image.Resampling.LANCZOS)
         return img
 
-    @staticmethod
-    def _needs_review(
-        internal: Dict[str, Any],
-        ocr_conf: float,
-        llm_error: Optional[str],
-        math_warnings: Optional[List[str]] = None,
-    ) -> bool:
-        """
-        Flag needs_review = True khi:
-          - LLM gặp lỗi (quota, empty, v.v.)
-          - OCR confidence quá thấp
-          - Tổng tiền = 0 (không trích được total)
-          - Có cảnh báo số học (qty × unit_price ≠ amount)
-        """
-        if llm_error:
-            return True
-        if ocr_conf < Config.OCR_MIN_CONF:
-            return True
-        if int(internal.get("total") or 0) <= 0:
-            return True
-        if math_warnings:
-            return True
-        return False
