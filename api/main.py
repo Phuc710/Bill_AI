@@ -142,7 +142,8 @@ Hệ thống trích xuất hóa đơn thông minh dành cho Android client.
 - **LLM**: Groq Llama 3.3 70B — phân tích và chuẩn hóa JSON tốc độ cao (LPU inference)
 
 ### Authentication
-Mọi request phải có header: `X-API-Key: <secret>`
+Nhấn nút **Authorize 🔓** bên phải, điền `X-API-Key` vào rồi bấm **Authorize**.
+Sau đó mọi request test sẽ tự gắn key vào.
 
 ### user_id
 Phải là UUID hợp lệ từ Supabase Auth (ví dụ: `550e8400-e29b-41d4-a716-446655440000`).
@@ -151,8 +152,12 @@ Phải là UUID hợp lệ từ Supabase Auth (ví dụ: `550e8400-e29b-41d4-a71
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",
-    # NOTE: Global api_key_header removed — dashboard route uses its own DASHBOARD_KEY auth.
-    # Mobile API auth is enforced by AuthLoggingMiddleware.
+    # OpenAPI security scheme — hiển thị nút Authorize trong Swagger UI
+    openapi_tags=[
+        {"name": "Bills", "description": "API endpoint cho Android client"},
+        {"name": "Dashboard", "description": "Admin dashboard endpoints"},
+        {"name": "System", "description": "Health check"},
+    ],
 )
 
 # ── Middleware ────────────────────────────────────────────────────────────────
@@ -165,6 +170,32 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── OpenAPI Security Scheme (Swagger Authorize button) ────────────────────────
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    from fastapi.openapi.utils import get_openapi
+    schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+        tags=app.openapi_tags,
+    )
+    schema["components"]["securitySchemes"] = {
+        "X-API-Key": {
+            "type": "apiKey",
+            "in": "header",
+            "name": "X-API-Key",
+            "description": "API key để xác thực. Lấy từ biến môi trường API_SECRET_KEY."
+        }
+    }
+    schema["security"] = [{"X-API-Key": []}]
+    app.openapi_schema = schema
+    return schema
+
+app.openapi = custom_openapi
 
 # ── Static files (dashboard assets) ──────────────────────────────────────────
 _static_dir = Config.BASE_DIR / "api" / "static"
