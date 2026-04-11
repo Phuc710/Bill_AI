@@ -29,6 +29,7 @@ outputs/
 *.png
 *.bmp
 *.webp
+!api/static/
 !frontend/
 
 # PaddleOCR auto-downloaded model cache
