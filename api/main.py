@@ -185,7 +185,7 @@ async def root_redirect():
     return RedirectResponse(url="/dashboard")
 
 
-@app.get("/health", tags=["System"])
+@app.api_route("/health", methods=["GET", "HEAD"], tags=["System"])
 async def health() -> dict:
     """Server health check — no auth required."""
     return {
