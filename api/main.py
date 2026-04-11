@@ -100,16 +100,6 @@ app = FastAPI(
     version     = "1.0.0",
     description = """\
 Hệ thống trích xuất & chuẩn hóa hóa đơn thông minh dành cho Android client.
-
-## 🔐 Authentication
-1. Nhấn nút **Authorize 🔓** ở góc phải màn hình.  
-2. Điền giá trị **`API_SECRET_KEY`** vào ô **Value**.  
-3. Nhấn **Authorize** → **Close**.  
-Sau đó mọi request đều tự động gắn `X-API-Key` vào header.
-
-## 🚀 Pipeline xử lý
-`Upload ảnh` → `OCR (VnCV, 100% offline)` → `Chuẩn hóa JSON (Groq Llama 3.3 70B)` → `Lưu Supabase`
-
 ## 📎 Lưu ý
 - `user_id` phải là UUID hợp lệ từ Supabase Auth — ví dụ: `550e8400-e29b-41d4-a716-446655440000`
 - Tất cả endpoint Bills đều cần header `X-API-Key`
