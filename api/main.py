@@ -177,6 +177,14 @@ app.include_router(bills_router)
 app.include_router(dashboard_router)
 
 
+from fastapi.responses import RedirectResponse
+
+@app.get("/", include_in_schema=False)
+async def root_redirect():
+    """Redirect root to dashboard for easier access."""
+    return RedirectResponse(url="/dashboard")
+
+
 @app.get("/health", tags=["System"])
 async def health() -> dict:
     """Server health check — no auth required."""

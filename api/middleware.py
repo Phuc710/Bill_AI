@@ -18,7 +18,7 @@ from core.config import Config
 log = logging.getLogger("billai.access")
 
 # Paths that don't require an API key
-_OPEN_PATHS = {"/health", "/docs", "/redoc", "/openapi.json", "/favicon.ico"}
+_OPEN_PATHS = {"/", "/health", "/docs", "/redoc", "/openapi.json", "/favicon.ico"}
 
 
 class AuthLoggingMiddleware(BaseHTTPMiddleware):
