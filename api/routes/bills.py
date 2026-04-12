@@ -16,9 +16,11 @@ from __future__ import annotations
 
 import csv
 import io
+import time
 import uuid as uuid_lib
 from pathlib import Path
 from typing import Optional
+
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
@@ -88,31 +90,30 @@ async def extract_bill(
     log.info(f"[{req_id}] extract_bill START | bill={bill_id} file={file.filename} user={user_id}")
 
     try:
+        t_start = time.perf_counter()
         result = await _pipeline.run(
             data,
             file.filename or "image.jpg",
             user_id,
             bill_id,
-            request_id=req_id,   # ← truyền vào tracker để log ID thống nhất
+            request_id=req_id,
         )
+        respond_ms = (time.perf_counter() - t_start) * 1000
     except Exception as exc:
         log.error(f"[{req_id}] Pipeline exception: {exc}")
         raise HTTPException(500, f"Pipeline error: {exc}")
 
     status = result.get("status")
-    meta   = result.get("meta") or {}
-    ocr_ms  = meta.get("ocr_ms",  0)
-    llm_ms  = meta.get("llm_ms",  0)
-    total_ms = meta.get("processing_ms", 0)
 
-    # Timing header → middleware sẽ append vào access log
+    # Timing header — phản ánh đúng thời gian user nhận được response
     from fastapi.responses import JSONResponse
+    import time as _time
     response = JSONResponse(content=result)
-    response.headers["X-Pipeline-Timing"] = (
-        f"OCR:{ocr_ms:.0f}ms LLM:{llm_ms:.0f}ms TOTAL:{total_ms:.0f}ms status={status}"
-    )
-    log.info(f"[{req_id}] extract_bill DONE | bill={bill_id} status={status}")
+    response.headers["X-Respond-Time"] = f"{respond_ms:.0f}ms"
+    response.headers["X-Pipeline-Status"] = str(status)
+    log.info(f"[{req_id}] extract_bill DONE | bill={bill_id} status={status} respond_ms={respond_ms:.0f}ms")
     return response
+
 
 
 # ── GET /bills ─────────────────────────────────────────────────────────────────

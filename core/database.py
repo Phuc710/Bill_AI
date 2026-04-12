@@ -61,6 +61,23 @@ class DatabaseService:
             log.warning(f"DB update_status FAILED [{status}] id={invoice_id}: {exc}")
 
     @classmethod
+    def update_status_safe(cls, invoice_id: str, user_id: str, status: str) -> None:
+        """
+        Upsert: tạo row mới hoặc update nếu đã tồn tại (1 roundtrip duy nhất).
+        Dùng thay cho create_invoice + update_status riêng lẻ để giảm latency.
+        """
+        try:
+            cls._db().table("invoices").upsert({
+                "id":      invoice_id,
+                "user_id": user_id,
+                "status":  status,
+            }, on_conflict="id").execute()
+            log.debug(f"DB upsert_safe OK id={invoice_id} status={status}")
+        except Exception as exc:
+            log.warning(f"DB upsert_safe FAILED id={invoice_id}: {exc}")
+
+
+    @classmethod
     def update_invoice_fields(cls, invoice_id: str, fields: Dict[str, Any]) -> bool:
         """Update các field cho phép từ màn hình edit bill."""
         allowed = {
